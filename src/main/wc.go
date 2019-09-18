@@ -34,7 +34,7 @@ func Reduce(key string, values *list.List) string {
 	
 	for e := values.Front(); e != nil; e = e.Next() {
 		i, _ := strconv.Atoi(e.Value.(string))
-		count += i  
+		count += i
 	}
 	
 	return strconv.Itoa(count)
