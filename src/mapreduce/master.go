@@ -188,6 +188,5 @@ func (mr *MapReduce) RunMaster() *list.List {
 		}
 	}
 
-	// xxx
-  return mr.KillWorkers()
+	return mr.KillWorkers()
 }
