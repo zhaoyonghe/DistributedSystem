@@ -1,7 +1,7 @@
 package mapreduce
 import "testing"
 import "fmt"
-//import "time"
+import "time"
 import "container/list"
 import "strings"
 import "os"
@@ -131,7 +131,7 @@ func cleanup(mr *MapReduce) {
   mr.CleanupFiles()
   RemoveFile(mr.file)
 }
-
+/*
 func TestBasic(t *testing.T) {
   fmt.Printf("Test: Basic mapreduce ...\n")
   mr := setup()
@@ -146,7 +146,7 @@ func TestBasic(t *testing.T) {
   cleanup(mr)
   fmt.Printf("  ... Basic Passed\n")
 }
-/*
+
 
 func TestOneFailure(t *testing.T) {
   fmt.Printf("Test: One Failure mapreduce ...\n")
@@ -162,7 +162,7 @@ func TestOneFailure(t *testing.T) {
   checkWorker(t, mr.stats)
   cleanup(mr)
   fmt.Printf("  ... One Failure Passed\n")
-}
+}*/
 
 func TestManyFailures(t *testing.T) {
   fmt.Printf("Test: One ManyFailures mapreduce ...\n")
@@ -178,15 +178,15 @@ func TestManyFailures(t *testing.T) {
     default:
       // Start 2 workers each sec. The workers fail after 10 jobs
       w := port("worker" + strconv.Itoa(i))
-      go RunWorker(mr.MasterAddress, w, MapFunc, ReduceFunc, 10)
+      go RunWorker(mr.MasterAddress, w, MapFunc, ReduceFunc, 1)
       i++
       w = port("worker" + strconv.Itoa(i))
-      go RunWorker(mr.MasterAddress, w, MapFunc, ReduceFunc, 10)
+      go RunWorker(mr.MasterAddress, w, MapFunc, ReduceFunc, 1)
       i++
       time.Sleep(1 * time.Second)
     }
   }
 
   fmt.Printf("  ... Many Failures Passed\n")
-}*/
+}
 
