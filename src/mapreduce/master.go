@@ -2,6 +2,7 @@ package mapreduce
 import "container/list"
 import "fmt"
 import "sync"
+import "strconv"
 
 type WorkerInfo struct {
   address string
@@ -102,12 +103,21 @@ func setMap(workers map[string] *WorkerInfo, key string, wkinfo *WorkerInfo, map
 }
 
 func detectWorkerFailure(failedWorkers chan string, idleWorkers chan string, mr *MapReduce, mapMutex *sync.Mutex) {
+	i := 3
 	for {
 		var key string
+		var address string
 		select {
 		case key = <- failedWorkers:
 			setMap(mr.Workers, key, &WorkerInfo{address: <- mr.registerChannel, key: key}, mapMutex)
 			idleWorkers <- key
+		default:
+		}
+		select {
+		case address = <- mr.registerChannel:
+			setMap(mr.Workers, strconv.Itoa(i), &WorkerInfo{address: address, key: strconv.Itoa(i)}, mapMutex)
+			idleWorkers <- strconv.Itoa(i)
+			i++
 		default:
 		}
 	}
@@ -120,8 +130,8 @@ func (mr *MapReduce) RunMaster() *list.List {
   mr.Workers = make(map[string] *WorkerInfo)
   var mapMutex sync.Mutex
   
-  idleWorkers := make(chan string, 2)
-  failedWorkers := make(chan string, 2)
+  idleWorkers := make(chan string, 500)
+  failedWorkers := make(chan string, 500)
 
   wk0 := <- mr.registerChannel
 	wk1 := <- mr.registerChannel
