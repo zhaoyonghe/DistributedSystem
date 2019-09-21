@@ -125,15 +125,15 @@ func detectWorkerFailure(failedWorkers chan string, idleWorkers chan string, mr 
 
 
 func (mr *MapReduce) RunMaster() *list.List {
-  // Your code here
+	// Your code here
+		
+	mr.Workers = make(map[string] *WorkerInfo)
+	var mapMutex sync.Mutex
   
-  mr.Workers = make(map[string] *WorkerInfo)
-  var mapMutex sync.Mutex
-  
-  idleWorkers := make(chan string, 500)
-  failedWorkers := make(chan string, 500)
+	idleWorkers := make(chan string, 500)
+	failedWorkers := make(chan string, 500)
 
-  wk0 := <- mr.registerChannel
+	wk0 := <- mr.registerChannel
 	wk1 := <- mr.registerChannel
 
 	mr.Workers["0"] = &WorkerInfo{address: wk0, key: "0"}
