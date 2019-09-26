@@ -1,0 +1,279 @@
+2019/09/26 17:03:03 rpc.Register: method "Kill" has 1 input parameters; needs exactly three
+Test: First primary ...
+before: curView: {0  }
+after: curView: {1 /var/tmp/824-1000/viewserver-6389-1 }
+  ... Passed
+Test: First backup ...
+before: curView: {1 /var/tmp/824-1000/viewserver-6389-1 }
+after: curView: {1 /var/tmp/824-1000/viewserver-6389-1 }
+before: curView: {1 /var/tmp/824-1000/viewserver-6389-1 }
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+  ... Passed
+Test: Backup takes over if primary fails ...
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+after: curView: {2 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-2}
+Primary Died
+before: curView: {3 /var/tmp/824-1000/viewserver-6389-2 }
+after: curView: {3 /var/tmp/824-1000/viewserver-6389-2 }
+  ... Passed
+Test: Restarted server becomes backup ...
+before: curView: {3 /var/tmp/824-1000/viewserver-6389-2 }
+after: curView: {3 /var/tmp/824-1000/viewserver-6389-2 }
+before: curView: {3 /var/tmp/824-1000/viewserver-6389-2 }
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+  ... Passed
+Test: Idle third server becomes backup if primary fails ...
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {4 /var/tmp/824-1000/viewserver-6389-2 /var/tmp/824-1000/viewserver-6389-1}
+Primary Died
+before: curView: {5 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+Backup Died
+after: curView: {6 /var/tmp/824-1000/viewserver-6389-1 }
+before: curView: {6 /var/tmp/824-1000/viewserver-6389-1 }
+after: curView: {6 /var/tmp/824-1000/viewserver-6389-1 }
+before: curView: {6 /var/tmp/824-1000/viewserver-6389-1 }
+***********************************
+***********************************
+***********************************
+***********************************
+***********************************
+***********************************
+after: curView: {7 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+before: curView: {7 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+after: curView: {7 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+  ... Passed
+Test: Restarted primary treated as dead ...
+before: curView: {7 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+after: curView: {7 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+before: curView: {7 /var/tmp/824-1000/viewserver-6389-1 /var/tmp/824-1000/viewserver-6389-3}
+Primary Died
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+  ... Passed
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+Test: Viewserver waits for primary to ack view ...
+before: curView: {8 /var/tmp/824-1000/viewserver-6389-3 }
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+v.vn: 9, vx.vn: 8  break
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+  ... Passed
+Test: Uninitialized server can't become primary ...
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+before: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+dick
+after: curView: {9 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-1}
+Backup Died
+before: curView: {10 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-2}
+Backup Died
+after: curView: {11 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {11 /var/tmp/824-1000/viewserver-6389-3 }
+***********************************
+***********************************
+***********************************
+***********************************
+***********************************
+***********************************
+after: curView: {12 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {12 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-2}
+Backup Died
+after: curView: {13 /var/tmp/824-1000/viewserver-6389-3 }
+before: curView: {13 /var/tmp/824-1000/viewserver-6389-3 }
+***********************************
+***********************************
+***********************************
+***********************************
+***********************************
+***********************************
+after: curView: {14 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-2}
+before: curView: {14 /var/tmp/824-1000/viewserver-6389-3 /var/tmp/824-1000/viewserver-6389-2}
+Backup Died
+after: curView: {15 /var/tmp/824-1000/viewserver-6389-3 }
+  ... Passed
+PASS
+ok  	_/home/w4118/Desktop/4113/src/viewservice	6.749s

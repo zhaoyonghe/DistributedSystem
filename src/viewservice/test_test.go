@@ -185,6 +185,7 @@ func Test1(t *testing.T) {
       ck3.Ping(vx.Viewnum)
       v, _ := ck1.Get()
       if v.Viewnum > vx.Viewnum {
+      	fmt.Printf("v.vn: %d, vx.vn: %d  break\n", v.Viewnum, vx.Viewnum)
         break
       }
       time.Sleep(PingInterval)
