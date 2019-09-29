@@ -19,6 +19,7 @@ type ViewServer struct {
 
   // Your declarations here.
 	curView View
+	toAckView View
 	acked bool
 	timeMap map[string] time.Time
 	idleQueue *list.List
@@ -34,6 +35,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   defer vs.mu.Unlock()
   
   fmt.Printf("before: curView: %v\n", vs.curView)
+  fmt.Printf("before: toAckView: %v\n", vs.toAckView)
   
   _, ok := vs.timeMap[args.Me]
   if ok {
@@ -46,15 +48,15 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   	if args.Me == vs.curView.Primary {
   		// this clerk is the primary
   		if args.Viewnum == 0 && vs.curView.Viewnum != 0 {
-  			// the primary crashes and quickly restarts without missing sending a single Ping.
-  			primaryDied(vs, args.Me)
-  		} else if args.Viewnum == 0 && vs.curView.Viewnum == 0 {
-  			// this will never happen
-  			fmt.Println("================================")
-  			fmt.Println("never hapen")
-  			fmt.Println("================================")
-  		} else if args.Viewnum == vs.curView.Viewnum {
+  			if vs.acked {
+  				// the primary crashes and quickly restarts without missing sending a single Ping.
+  				primaryDied(vs, args.Me)
+  			}
+  			// the primary crashes and quickly restarts before ack.
+  			// spins forever.
+  		} else if args.Viewnum == vs.toAckView.Viewnum {
   			vs.acked = true
+  			vs.toAckView = vs.curView
   		}
   	} else if args.Me == vs.curView.Backup {
   		// this clerk is the backup
@@ -68,7 +70,13 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   		// this clerk is an idle clerk
   		// do nothing
   	}
-  	reply.View = vs.curView
+  	
+  	if vs.acked {
+  		reply.View = vs.curView
+  	} else {
+  		reply.View = vs.toAckView
+  	}
+  	
   } else {
   	// new clerk
   	
@@ -85,6 +93,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   		// the view has changed
   		// need to be acked by primary
   		vs.acked = false
+  		vs.toAckView = vs.curView
   		
   		reply.View = vs.curView
   	} else if vs.curView.Primary != "" && vs.curView.Backup == "" {
@@ -99,27 +108,32 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 				// the view has changed
 				// need to be acked by primary
   			vs.acked = false
+  			vs.toAckView = vs.curView
   			
   			reply.View = vs.curView
   		} else {
   			// not acked 
-  			fmt.Println("***********************************")
-  			fmt.Println("***********************************")
-  			fmt.Println("***********************************")
-  			fmt.Println("***********************************")
-  			fmt.Println("***********************************")
-  			fmt.Println("***********************************")
-  			reply.View = vs.curView
+  			
+  			// view cannot be changed
+  			vs.toAckView = vs.curView
+  			
   			vs.curView.Viewnum += 1
   			vs.curView.Backup = args.Me
+  			
+  			reply.View = vs.toAckView
   		}
   	} else if vs.curView.Primary != "" && vs.curView.Backup != "" {
   		// has primary and backup
   		// this clerk will become an idle clerk
   		vs.idleQueue.PushBack(args.Me)
   		
-  		// view should not change
-  		reply.View = vs.curView
+  		// view will not change
+  		if vs.acked {
+  			reply.View = vs.curView
+  		} else {
+  			reply.View = vs.toAckView
+  		}
+  		
   	} else {
 			// this will never happen
 			fmt.Println("================================")
@@ -129,7 +143,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   }
   
   fmt.Printf("after: curView: %v\n", vs.curView)
-
+	fmt.Printf("after: toAckView: %v\n", vs.toAckView)
   return nil
 }
 
@@ -138,7 +152,11 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
   // Your code here.
-	reply.View = vs.curView
+  if vs.acked {
+  	reply.View = vs.curView
+  } else {
+  	reply.View = vs.toAckView
+  }
 	
   return nil
 }
@@ -194,6 +212,8 @@ func primaryDied(vs *ViewServer, clerkName string) {
 	
 	vs.curView.Viewnum += 1
 	vs.acked = false
+	vs.toAckView = vs.curView
+	
 	delete(vs.timeMap, clerkName)
 	
 	// situation that we have the primary, do not have the backup, but have the idle servers does not exist
@@ -213,6 +233,8 @@ func backupDied(vs *ViewServer, clerkName string) {
 	
 	vs.curView.Viewnum += 1
 	vs.acked = false
+	vs.toAckView = vs.curView
+	
 	delete(vs.timeMap, clerkName)
 }
 
@@ -246,7 +268,8 @@ func StartServer(me string) *ViewServer {
   vs.me = me
   // Your vs.* initializations here.
   vs.dead = false
-  vs.curView = View {0, "", ""};
+  vs.curView = View {0, "", ""}
+  vs.toAckView = View {0, "", ""}
   vs.timeMap = make(map[string] time.Time)
   vs.acked = false
   vs.idleQueue = list.New()
