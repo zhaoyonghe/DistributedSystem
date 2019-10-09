@@ -6,14 +6,20 @@ import "fmt"
 
 // You'll probably need to uncomment these:
 // import "time"
-// import "crypto/rand"
-// import "math/big"
+import "crypto/rand"
+import "math/big"
 
-
+func nrand() int64 {
+	max := big.NewInt(int64(1) << 62)
+	bigx, _ := rand.Int(rand.Reader, max)
+	x := bigx.Int64()
+	return x
+}
 
 type Clerk struct {
   vs *viewservice.Clerk
   // Your declarations here
+  
 }
 
 
@@ -67,10 +73,26 @@ func call(srv string, rpcname string,
 // says the key doesn't exist (has never been Put().
 //
 func (ck *Clerk) Get(key string) string {
+	// Your code here.
+	uid := nrand()
+	
+	for {
+		primary := ck.Primary()
+		if primary == "" {
+			continue
+		}
+	
+		args := &GetArgs{}
+		args.Key = key
+		args.UID = uid
+		
+		var reply GetReply
 
-  // Your code here.
-
-  return "???"
+		ok := call(primary, "PBServer.Get", args, &reply)
+		if ok && reply.Err == OK {
+			return reply.Value
+		}
+	}
 }
 
 //
@@ -78,9 +100,32 @@ func (ck *Clerk) Get(key string) string {
 // must keep trying until it succeeds.
 //
 func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
-
   // Your code here.
-  return "???"
+  uid := nrand()
+  
+	for {
+		primary := ck.Primary()
+		if primary == "" {
+			continue
+		}
+		
+		args := &PutArgs{}
+		args.Key = key
+		args.Value = value
+		args.DoHash = dohash
+		args.UID = uid
+		
+		var reply PutReply
+
+		ok := call(primary, "PBServer.Put", args, &reply)
+		if ok && reply.Err == OK {
+			if dohash {
+				return reply.PreviousValue
+			} else {
+				return ""
+			}
+		}
+	}
 }
 
 func (ck *Clerk) Put(key string, value string) {
