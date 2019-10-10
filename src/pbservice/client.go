@@ -89,7 +89,7 @@ func (ck *Clerk) Get(key string) string {
 		var reply GetReply
 
 		ok := call(primary, "PBServer.Get", args, &reply)
-		if ok && reply.Err == OK {
+		if ok && reply.Err != ErrWrongServer {
 			return reply.Value
 		}
 	}

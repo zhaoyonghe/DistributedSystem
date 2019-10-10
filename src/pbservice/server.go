@@ -37,6 +37,7 @@ type PBServer struct {
   uidMap map[int64] string
   vshost string
   mu sync.Mutex
+  newServer bool
 }
 
 func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
@@ -52,7 +53,7 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
   		// This put operation has not been done before.
 	 		if args.DoHash {
 	 			// This operation is PutDoHash.
-				fmt.Println("put dohash")
+				//fmt.Println("put dohash")
 				value, exists := pb.stMap[args.Key]
 				if !exists {
 					value = ""
@@ -68,7 +69,7 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 				}
 			} else {
 				// This operation is Put.
-				fmt.Println("put")
+				//fmt.Println("put")
 				pb.stMap[args.Key] = args.Value
 				pb.uidMap[args.UID] = ""
 				reply.Err = OK
@@ -105,7 +106,7 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
   primary := pb.vs.Primary()
   if primary == pb.me {
 		value, exists := pb.stMap[args.Key]
-		fmt.Println("get")
+		//fmt.Println("get")
 		if exists {
 			reply.Err = OK
 			reply.Value = value
@@ -117,6 +118,7 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
   	// I am backup
   	fmt.Println("i am backup!!!!!!!!!")
   	reply.Err = ErrWrongServer
+  	reply.Value = ""
   }
   return nil
 }
@@ -169,6 +171,8 @@ func (pb *PBServer) tick() {
 			ok = call(reply.View.Backup, "PBServer.TransferMap", tmArgs, &tmReply)
 			if !ok || !tmReply.Received {
 				fmt.Println("Transfer failed!!!!!!")
+			} else {
+				fmt.Println("Transfer successed ***********")
 			}
 		}
 	}
@@ -176,7 +180,10 @@ func (pb *PBServer) tick() {
 
 // check if the backup is new (needs stMap)
 func (pb *PBServer) Check(args *CheckNewArgs, reply *CheckNewReply) error {
-	if pb.viewnum == 0 || len(pb.stMap) == 0{
+  pb.mu.Lock()
+  defer pb.mu.Unlock()
+
+	if pb.newServer {
 		fmt.Println("I am new backup.................")
 		reply.New = true
 	} else {
@@ -189,12 +196,16 @@ func (pb *PBServer) Check(args *CheckNewArgs, reply *CheckNewReply) error {
 
 // transfer the whole database(stMap) to the backup
 func (pb *PBServer) TransferMap(args *TransferMapArgs, reply *TransferMapReply) error {
+  pb.mu.Lock()
+  defer pb.mu.Unlock()
+
 	view, _ := pb.vs.Get()
 	
 	if view.Backup == pb.me {
 		// i am the backup, receive the map
 		pb.stMap = args.StMap
 		pb.uidMap = args.UIDMap
+		pb.newServer = false
 		reply.Received = true
 		return nil
 	}
@@ -204,6 +215,9 @@ func (pb *PBServer) TransferMap(args *TransferMapArgs, reply *TransferMapReply) 
 
 // put the same key-value pair to the backup
 func (pb *PBServer) BackupPut(args *PutArgs, reply *PutReply) error {
+  pb.mu.Lock()
+  defer pb.mu.Unlock()
+
 	view, _ := pb.vs.Get()
 	if pb.me == view.Backup {
   	// I am backup
@@ -248,6 +262,7 @@ func StartServer(vshost string, me string) *PBServer {
   pb.stMap = make(map[string] string)
   pb.uidMap = make(map[int64] string)
   pb.vshost = vshost
+  pb.newServer = true
 
   rpcs := rpc.NewServer()
   rpcs.Register(pb)
