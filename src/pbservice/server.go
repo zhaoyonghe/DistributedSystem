@@ -62,22 +62,56 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 				pb.uidMap[args.UID] = value
 				reply.PreviousValue = value
 				reply.Err = OK
-
+				///*
 				if view.Backup != "" {
 					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
-					fmt.Printf("backup put dohash %t\n", ok)
+					fmt.Printf("backup put %t\n", ok)
 				}
+				//*/
+				/*
+				for {
+					view, _ := pb.vs.Get()
+					if view.Backup != "" {
+						ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
+						fmt.Printf("backup put dohash %t\n", ok)
+						if ok && reply.Err == OK {
+							break
+						}
+					} else {
+						fmt.Println("waiting for backup!!!")
+						break
+					}
+				}
+				*/
+
 			} else {
 				// This operation is Put.
 				//fmt.Println("put")
 				pb.stMap[args.Key] = args.Value
 				pb.uidMap[args.UID] = ""
 				reply.Err = OK
-				
+				///*
 				if view.Backup != "" {
 					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
 					fmt.Printf("backup put %t\n", ok)
 				}
+				//*/
+				/*
+				for {
+					view, _ := pb.vs.Get()
+					if view.Backup != "" {
+						ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
+						fmt.Printf("backup put %t\n", ok)
+						if ok && reply.Err == OK{
+							break
+						}
+					} else {
+						fmt.Println("waiting for backup!!!")
+						break
+					}
+				}
+				*/
+				
 			}
   	} else {
 			// This put operation has been done before.

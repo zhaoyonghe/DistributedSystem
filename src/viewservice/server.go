@@ -34,8 +34,8 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   vs.mu.Lock();
   defer vs.mu.Unlock()
   
-  fmt.Printf("before: curView: %v\n", vs.curView)
-  fmt.Printf("before: toAckView: %v\n", vs.toAckView)
+  //fmt.Printf("before: curView: %v\n", vs.curView)
+  //fmt.Printf("before: toAckView: %v\n", vs.toAckView)
   
   _, ok := vs.timeMap[args.Me]
   if ok {
@@ -126,6 +126,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   		// has primary and backup
   		// this clerk will become an idle clerk
   		vs.idleQueue.PushBack(args.Me)
+  		fmt.Println("pushpush")
   		
   		// view will not change
   		if vs.acked {
@@ -142,8 +143,12 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
   	}
   }
   
-  fmt.Printf("after: curView: %v\n", vs.curView)
-	fmt.Printf("after: toAckView: %v\n", vs.toAckView)
+  if vs.idleQueue.Front() == nil {
+  	fmt.Printf("after: curView: %v idle: nil\n", vs.curView)
+  } else {
+  	fmt.Printf("after: curView: %v idle: %s\n", vs.curView, vs.idleQueue.Front().Value.(string))
+  }
+	//fmt.Printf("after: toAckView: %v\n", vs.toAckView)
   return nil
 }
 
@@ -189,7 +194,11 @@ func (vs *ViewServer) tick() {
   				backupDied(vs, clerkName)
   			}
   		} else {
-  			idleDied(vs, clerkName)
+  			if vs.idleQueue.Front() != nil && clerkName == vs.idleQueue.Front().Value.(string) {
+  				idleDied(vs, clerkName)
+  			} else {
+  				fmt.Println("fuck")
+  			}
   		}
   	}
   }
@@ -239,6 +248,8 @@ func backupDied(vs *ViewServer, clerkName string) {
 }
 
 func idleDied(vs *ViewServer, clerkName string) {
+	fmt.Println("idle Died")
+
 	var ele *list.Element = nil
 	for e := vs.idleQueue.Front(); e != nil; e = e.Next() {
 		if e.Value.(string) == clerkName {
@@ -250,6 +261,8 @@ func idleDied(vs *ViewServer, clerkName string) {
 	if ele != nil {
 		vs.idleQueue.Remove(ele)
 	}
+	
+	delete(vs.timeMap, clerkName)
 }
 
 
