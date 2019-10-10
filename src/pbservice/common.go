@@ -38,6 +38,23 @@ type GetReply struct {
 
 
 // Your RPC definitions here.
+type CheckNewArgs struct {
+
+}
+
+type CheckNewReply struct {
+	New bool
+}
+
+type TransferMapArgs struct {
+	StMap map[string] string
+}
+
+type TransferMapReply struct {
+	Received bool
+}
+
+
 
 func hash(s string) uint32 {
   h := fnv.New32a()

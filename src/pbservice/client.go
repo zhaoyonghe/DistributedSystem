@@ -77,7 +77,7 @@ func (ck *Clerk) Get(key string) string {
 	uid := nrand()
 	
 	for {
-		primary := ck.Primary()
+		primary := ck.vs.Primary()
 		if primary == "" {
 			continue
 		}
@@ -104,7 +104,7 @@ func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
   uid := nrand()
   
 	for {
-		primary := ck.Primary()
+		primary := ck.vs.Primary()
 		if primary == "" {
 			continue
 		}
