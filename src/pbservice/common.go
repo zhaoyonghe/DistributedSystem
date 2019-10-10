@@ -48,6 +48,7 @@ type CheckNewReply struct {
 
 type TransferMapArgs struct {
 	StMap map[string] string
+	UIDMap map[int64] string
 }
 
 type TransferMapReply struct {

@@ -34,39 +34,61 @@ type PBServer struct {
   // Your declarations here.
   viewnum uint
   stMap map[string] string
+  uidMap map[int64] string
   vshost string
+  mu sync.Mutex
 }
 
 func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
   // Your code here.
+  pb.mu.Lock()
+  defer pb.mu.Unlock()
+  
   view, _ := pb.vs.Get()
   if view.Primary == pb.me {
   	// I am primary
-		if args.DoHash {
-			fmt.Println("put dohash")
-			value, exists := pb.stMap[args.Key]
-			if exists {
+  	_, doneBefore := pb.uidMap[args.UID]
+  	if !doneBefore {
+  		// This put operation has not been done before.
+	 		if args.DoHash {
+	 			// This operation is PutDoHash.
+				fmt.Println("put dohash")
+				value, exists := pb.stMap[args.Key]
+				if !exists {
+					value = ""
+				}
 				pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
+				pb.uidMap[args.UID] = value
 				reply.PreviousValue = value
 				reply.Err = OK
-			} else {
-				pb.stMap[args.Key] = strconv.Itoa(int(hash(args.Value)))
-				reply.PreviousValue = ""
-				reply.Err = OK
+
 				if view.Backup != "" {
 					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
 					fmt.Printf("backup put dohash %t\n", ok)
 				}
+			} else {
+				// This operation is Put.
+				fmt.Println("put")
+				pb.stMap[args.Key] = args.Value
+				pb.uidMap[args.UID] = ""
+				reply.Err = OK
+				
+				if view.Backup != "" {
+					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
+					fmt.Printf("backup put %t\n", ok)
+				}
 			}
-		} else {
-			fmt.Println("put")
-			pb.stMap[args.Key] = args.Value
-			reply.Err = OK
-			if view.Backup != "" {
-				ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
-				fmt.Printf("backup put %t\n", ok)
-			}
-		}
+  	} else {
+			// This put operation has been done before.
+			// Directly give back the result.
+  		fmt.Println("this put operation has done before!!!!!!!!!")
+  		if args.DoHash {
+  			reply.PreviousValue = pb.uidMap[args.UID]
+  			reply.Err = OK
+  		} else {
+  			reply.Err = OK
+  		}
+  	}
   } else {
   	// I am backup
   	fmt.Println("i am backup!!!!!!!!!")
@@ -77,6 +99,9 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
   // Your code here.
+  pb.mu.Lock()
+  defer pb.mu.Unlock()
+  
   primary := pb.vs.Primary()
   if primary == pb.me {
 		value, exists := pb.stMap[args.Key]
@@ -100,6 +125,9 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 // ping the viewserver periodically.
 func (pb *PBServer) tick() {
   // Your code here.
+  pb.mu.Lock()
+  defer pb.mu.Unlock()
+  
   args := &viewservice.PingArgs{}
   args.Me = pb.me
   args.Viewnum = pb.viewnum
@@ -110,7 +138,7 @@ func (pb *PBServer) tick() {
   ok := call(pb.vshost, "ViewServer.Ping", args, &reply)
   
   pb.viewnum = reply.View.Viewnum
-	fmt.Printf("ping %d %t\n", pb.viewnum, ok)
+	//fmt.Printf("ping %d %t\n", pb.viewnum, ok)
 	
 	if reply.View.Primary == pb.me && reply.View.Backup != "" {
 		// i am the primary and has a backup
@@ -124,11 +152,18 @@ func (pb *PBServer) tick() {
 			// is new
 			// transfer the stMap to backup
 			tmArgs := &TransferMapArgs{}
+			
 			targetMap := make(map[string] string)
 			for key, value := range pb.stMap {
 				targetMap[key] = value
 			}
 			tmArgs.StMap = targetMap
+			
+			targetMap2 := make(map[int64] string)
+			for key, value := range pb.uidMap {
+				targetMap2[key] = value
+			}
+			tmArgs.UIDMap = targetMap2
 			
 			var tmReply TransferMapReply
 			ok = call(reply.View.Backup, "PBServer.TransferMap", tmArgs, &tmReply)
@@ -159,6 +194,7 @@ func (pb *PBServer) TransferMap(args *TransferMapArgs, reply *TransferMapReply) 
 	if view.Backup == pb.me {
 		// i am the backup, receive the map
 		pb.stMap = args.StMap
+		pb.uidMap = args.UIDMap
 		reply.Received = true
 		return nil
 	}
@@ -174,18 +210,18 @@ func (pb *PBServer) BackupPut(args *PutArgs, reply *PutReply) error {
 		if args.DoHash {
 			fmt.Println("backupput dohash")
 			value, exists := pb.stMap[args.Key]
-			if exists {
-				pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
-				reply.PreviousValue = value
-				reply.Err = OK
-			} else {
-				pb.stMap[args.Key] = strconv.Itoa(int(hash(args.Value)))
-				reply.PreviousValue = ""
-				reply.Err = OK
+			if !exists {
+				value = ""
 			}
+			pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
+			pb.uidMap[args.UID] = value
+			reply.PreviousValue = value
+			reply.Err = OK
+
 		} else {
 			fmt.Println("backupput")
 			pb.stMap[args.Key] = args.Value
+			pb.uidMap[args.UID] = ""
 			reply.Err = OK
 		}
 		return nil
@@ -210,6 +246,7 @@ func StartServer(vshost string, me string) *PBServer {
   // Your pb.* initializations here.
   pb.viewnum = 0
   pb.stMap = make(map[string] string)
+  pb.uidMap = make(map[int64] string)
   pb.vshost = vshost
 
   rpcs := rpc.NewServer()
