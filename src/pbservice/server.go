@@ -10,7 +10,6 @@ import "os"
 import "syscall"
 import "math/rand"
 import "sync"
-
 import "strconv"
 
 // Debugging
@@ -38,6 +37,7 @@ type PBServer struct {
   vshost string
   mu sync.Mutex
   newServer bool
+  forcedTransfer bool
 }
 
 func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
@@ -62,19 +62,15 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 				pb.uidMap[args.UID] = value
 				reply.PreviousValue = value
 				
-				/*
-				if view.Backup != "" {
-					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
-					fmt.Printf("backup put %t\n", ok)
-				}
-				*/
-				///*
+				ftFlag := true
 				for count := 0; count < 5; count++ {
 					view, _ := pb.vs.Get()
 					if view.Backup != "" {
 						ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
 						fmt.Printf("kk <%v> backup put dohash %t\n", view.Backup, ok)
 						if ok {
+							fmt.Println("primary map:", pb.stMap)
+							ftFlag = false
 							break
 						}
 					} else {
@@ -82,30 +78,24 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 						break
 					}
 				}
-				//*/
 				fmt.Println("66666666666666")
+				pb.forcedTransfer = ftFlag
 				reply.Err = OK
-				
-
 			} else {
 				// This operation is Put.
 				//fmt.Println("put")
 				pb.stMap[args.Key] = args.Value
 				pb.uidMap[args.UID] = ""
 				
-				/*
-				if view.Backup != "" {
-					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
-					fmt.Printf("backup put %t\n", ok)
-				}
-				*/
-				///*
+				ftFlag := true
 				for count := 0; count < 5; count++ {
 					view, _ := pb.vs.Get()
 					if view.Backup != "" {
 						ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
 						fmt.Printf("kk <%v> backup put %t\n", view.Backup, ok)
 						if ok {
+							fmt.Println("primary map:", pb.stMap)
+							ftFlag = false
 							break
 						}
 					} else {
@@ -113,8 +103,8 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 						break
 					}
 				}
-				//*/
 				fmt.Println("66666666666666")
+				pb.forcedTransfer = ftFlag
 				reply.Err = OK
 			}
   	} else {
@@ -187,11 +177,19 @@ func (pb *PBServer) tick() {
 		
 		var cknReply CheckNewReply
 		
+		if !pb.forcedTransfer {
+			for count := 0; count < 5; count++ {
+				ok = call(reply.View.Backup, "PBServer.Check", cknArgs, &cknReply)
+				fmt.Printf("call check %s %t\n", reply.View.Backup, ok)
+				if ok {
+					break
+				}
+			}
+		} else {
+			fmt.Println("-----forced transfer-----")
+		}
 		
-		ok = call(reply.View.Backup, "PBServer.Check", cknArgs, &cknReply)
-		
-		
-		if cknReply.New {
+		if pb.forcedTransfer || cknReply.New {
 			// is new
 			// transfer the stMap to backup
 			tmArgs := &TransferMapArgs{}
@@ -209,16 +207,19 @@ func (pb *PBServer) tick() {
 			tmArgs.UIDMap = targetMap2
 			
 			var tmReply TransferMapReply
-			for {
+			for count := 0; count < 5; count++ {
 				ok = call(reply.View.Backup, "PBServer.TransferMap", tmArgs, &tmReply)
 				if !ok || !tmReply.Received {
 					fmt.Println("Transfer failed!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 				} else {
 					fmt.Println("Transfer successed ***********")
+					pb.forcedTransfer = false
 					break
 				}
 			}
+			
 		}
+		
 	}
 }
 
@@ -249,6 +250,9 @@ func (pb *PBServer) TransferMap(args *TransferMapArgs, reply *TransferMapReply) 
 		// i am the backup, receive the map
 		pb.stMap = args.StMap
 		pb.uidMap = args.UIDMap
+		
+		fmt.Println("backup received map:", pb.stMap)
+		
 		pb.newServer = false
 		reply.Received = true
 		return nil
@@ -285,6 +289,7 @@ func (pb *PBServer) BackupPut(args *PutArgs, reply *PutReply) error {
 				reply.Err = OK
 			}
 		}
+		fmt.Println("backup map:", pb.stMap)
 		return nil
 	}
 	return fmt.Errorf("BackupPut: I am primary %s!", view.Backup)
@@ -310,6 +315,7 @@ func StartServer(vshost string, me string) *PBServer {
   pb.uidMap = make(map[int64] string)
   pb.vshost = vshost
   pb.newServer = true
+  pb.forcedTransfer = false
 
   rpcs := rpc.NewServer()
   rpcs.Register(pb)
