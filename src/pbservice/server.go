@@ -61,20 +61,20 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 				pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
 				pb.uidMap[args.UID] = value
 				reply.PreviousValue = value
-				reply.Err = OK
-				///*
+				
+				/*
 				if view.Backup != "" {
 					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
 					fmt.Printf("backup put %t\n", ok)
 				}
-				//*/
-				/*
-				for {
+				*/
+				///*
+				for count := 0; count < 5; count++ {
 					view, _ := pb.vs.Get()
 					if view.Backup != "" {
 						ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
-						fmt.Printf("backup put dohash %t\n", ok)
-						if ok && reply.Err == OK {
+						fmt.Printf("kk <%v> backup put dohash %t\n", view.Backup, ok)
+						if ok {
 							break
 						}
 					} else {
@@ -82,27 +82,30 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 						break
 					}
 				}
-				*/
+				//*/
+				fmt.Println("66666666666666")
+				reply.Err = OK
+				
 
 			} else {
 				// This operation is Put.
 				//fmt.Println("put")
 				pb.stMap[args.Key] = args.Value
 				pb.uidMap[args.UID] = ""
-				reply.Err = OK
-				///*
+				
+				/*
 				if view.Backup != "" {
 					ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
 					fmt.Printf("backup put %t\n", ok)
 				}
-				//*/
-				/*
-				for {
+				*/
+				///*
+				for count := 0; count < 5; count++ {
 					view, _ := pb.vs.Get()
 					if view.Backup != "" {
 						ok := call(view.Backup, "PBServer.BackupPut", args, &reply)
-						fmt.Printf("backup put %t\n", ok)
-						if ok && reply.Err == OK{
+						fmt.Printf("kk <%v> backup put %t\n", view.Backup, ok)
+						if ok {
 							break
 						}
 					} else {
@@ -110,8 +113,9 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 						break
 					}
 				}
-				*/
-				
+				//*/
+				fmt.Println("66666666666666")
+				reply.Err = OK
 			}
   	} else {
 			// This put operation has been done before.
@@ -183,7 +187,10 @@ func (pb *PBServer) tick() {
 		
 		var cknReply CheckNewReply
 		
+		
 		ok = call(reply.View.Backup, "PBServer.Check", cknArgs, &cknReply)
+		
+		
 		if cknReply.New {
 			// is new
 			// transfer the stMap to backup
@@ -202,11 +209,14 @@ func (pb *PBServer) tick() {
 			tmArgs.UIDMap = targetMap2
 			
 			var tmReply TransferMapReply
-			ok = call(reply.View.Backup, "PBServer.TransferMap", tmArgs, &tmReply)
-			if !ok || !tmReply.Received {
-				fmt.Println("Transfer failed!!!!!!")
-			} else {
-				fmt.Println("Transfer successed ***********")
+			for {
+				ok = call(reply.View.Backup, "PBServer.TransferMap", tmArgs, &tmReply)
+				if !ok || !tmReply.Received {
+					fmt.Println("Transfer failed!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+				} else {
+					fmt.Println("Transfer successed ***********")
+					break
+				}
 			}
 		}
 	}
@@ -254,23 +264,26 @@ func (pb *PBServer) BackupPut(args *PutArgs, reply *PutReply) error {
 
 	view, _ := pb.vs.Get()
 	if pb.me == view.Backup {
-  	// I am backup
-		if args.DoHash {
-			fmt.Println("backupput dohash")
-			value, exists := pb.stMap[args.Key]
-			if !exists {
-				value = ""
-			}
-			pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
-			pb.uidMap[args.UID] = value
-			reply.PreviousValue = value
-			reply.Err = OK
+  	_, doneBefore := pb.uidMap[args.UID]
+  	if !doneBefore {
+			// I am backup
+			if args.DoHash {
+				fmt.Println("backupput dohash")
+				value, exists := pb.stMap[args.Key]
+				if !exists {
+					value = ""
+				}
+				pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
+				pb.uidMap[args.UID] = value
+				reply.PreviousValue = value
+				reply.Err = OK
 
-		} else {
-			fmt.Println("backupput")
-			pb.stMap[args.Key] = args.Value
-			pb.uidMap[args.UID] = ""
-			reply.Err = OK
+			} else {
+				fmt.Println("backupput")
+				pb.stMap[args.Key] = args.Value
+				pb.uidMap[args.UID] = ""
+				reply.Err = OK
+			}
 		}
 		return nil
 	}
