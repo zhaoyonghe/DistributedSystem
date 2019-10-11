@@ -279,7 +279,6 @@ func (pb *PBServer) BackupPut(args *PutArgs, reply *PutReply) error {
 				}
 				pb.stMap[args.Key] = strconv.Itoa(int(hash(value + args.Value)))
 				pb.uidMap[args.UID] = value
-				reply.PreviousValue = value
 				reply.Err = OK
 
 			} else {
