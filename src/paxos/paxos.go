@@ -28,7 +28,25 @@ import "syscall"
 import "sync"
 import "fmt"
 import "math/rand"
+import "time"
+import "math"
 
+const Debug = 1
+
+func DPrintf(format string, a ...interface{}) (n int, err error) {
+  if Debug > 0 {
+    log.Printf(format, a...)
+  }
+  return
+}
+
+type Instance struct {
+  seq int
+  np int64
+  na int64
+  va interface{}
+  decided bool
+}
 
 type Paxos struct {
   mu sync.Mutex
@@ -38,45 +56,302 @@ type Paxos struct {
   rpcCount int
   peers []string
   me int // index into peers[]
-
-
   // Your data here.
+  instanceMap map[int]*Instance
+  peersDone []int
 }
 
-//
-// call() sends an RPC to the rpcname handler on server srv
-// with arguments args, waits for the reply, and leaves the
-// reply in reply. the reply argument should be a pointer
-// to a reply structure.
-//
-// the return value is true if the server responded, and false
-// if call() was not able to contact the server. in particular,
-// the replys contents are only valid if call() returned true.
-//
-// you should assume that call() will time out and return an
-// error after a while if it does not get a reply from the server.
-//
-// please use call() to send all RPCs, in client.go and server.go.
-// please do not change this function.
-//
-func call(srv string, name string, args interface{}, reply interface{}) bool {
-  c, err := rpc.Dial("unix", srv)
-  if err != nil {
-    err1 := err.(*net.OpError)
-    if err1.Err != syscall.ENOENT && err1.Err != syscall.ECONNREFUSED {
-      fmt.Printf("paxos Dial() failed: %v\n", err1)
-    }
-    return false
-  }
-  defer c.Close()
-    
-  err = c.Call(name, args, reply)
-  if err == nil {
-    return true
+func (px *Paxos) sendPropose(seq int, N int64, i int, proposeReplyChan chan ProposeReply) {
+  proposeArgs := &ProposeArgs{}
+  var proposeReply ProposeReply
+
+  proposeArgs.Seq = seq
+  proposeArgs.N = N
+
+  ok := call(px.peers[i], "Paxos.ProposeNHandler", proposeArgs, &proposeReply)
+  DPrintf("got propose reply %v \n", proposeReply)
+
+  if ok {
+      proposeReplyChan <- proposeReply
+  } else {
+    proposeReply.Message = NO_REPLY
+    proposeReplyChan <- proposeReply
   }
 
-  fmt.Println(err)
-  return false
+}
+
+func (px *Paxos) sendAccept(seq int, N int64, value interface{}, i int, acceptOKChan chan bool) {
+  acceptArgs := &AcceptArgs{}
+  var acceptReply AcceptReply
+
+  acceptArgs.Seq = seq
+  acceptArgs.N = N
+  acceptArgs.Val = value
+
+  ok := call(px.peers[i], "Paxos.AcceptNVHandler", acceptArgs, &acceptReply)
+
+  if ok && acceptReply.Message == ACCEPT_OK{
+      acceptOKChan <- true
+  } else {
+      acceptOKChan <- false
+  }
+}
+
+func (px *Paxos) sendDecide(seq int, value interface{}, i int) {
+  decideArgs := &DecideArgs{}
+  var decideReply DecideReply
+
+  decideArgs.Seq = seq
+  decideArgs.Val = value
+
+  call(px.peers[i], "Paxos.DecideVHandler", decideArgs, &decideReply)
+}
+
+
+func (px *Paxos) isDecided(seq int) bool {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  inst, exists := px.instanceMap[seq]
+
+  if !exists {
+    return false
+  }
+
+  return inst.decided
+}
+
+func (px *Paxos) Proposer(seq int, v interface{}) {
+  for !px.isDecided(seq) {
+    //====================== Propose Phase ======================
+    DPrintf("%v: Propose Phase start\n", px.me)
+
+    proposeReplyChan := make(chan ProposeReply, len(px.peers) * 2)
+
+    N := time.Now().UnixNano()
+    DPrintf("%v: N: %v\n", px.me, N)
+
+    for i := 0; i < len(px.peers); i++ {
+      if i == px.me {
+        proposeArgs := &ProposeArgs{}
+        var proposeReply ProposeReply
+
+        proposeArgs.Seq = seq
+        proposeArgs.N = N
+
+        px.ProposeNHandler(proposeArgs, &proposeReply)
+        proposeReplyChan <- proposeReply
+      } else {
+        go px.sendPropose(seq, N, i, proposeReplyChan)
+      }
+    }
+    DPrintf("%v: Propose to all Done\n", px.me)
+
+    okCount := 0
+    notokCount := 0
+    var replyMaxNa int64 = 0
+    var replyMaxVa interface{} = nil
+
+    majority := len(px.peers) / 2 + 1
+
+    for {
+      select {
+      case reply := <- proposeReplyChan:
+        if reply.Message == PROPOSE_OK {
+          okCount++
+          DPrintf("okCount:%v, notokCount:%v, majority:%v\n", okCount, notokCount, majority)
+          if reply.Na > replyMaxNa {
+            replyMaxNa = reply.Na
+            replyMaxVa = reply.Va
+          }
+          if okCount >= majority {
+            goto Propose_Get_Result
+          }
+        } else {
+          notokCount++
+          DPrintf("okCount:%v, notokCount:%v, majority:%v\n", okCount, notokCount, majority)
+          if notokCount >= majority {
+            goto Propose_Get_Result
+          }
+        }
+      default:
+      }    
+    }
+
+Propose_Get_Result:
+    if okCount >= majority {
+      DPrintf("majority PROPOSE_OK\n")
+    } else {
+      return
+    }
+
+    //====================== Accept Phase ======================
+
+    acceptOKChan := make(chan bool, len(px.peers) * 2)
+
+    if replyMaxVa != nil {
+      v = replyMaxVa
+    }
+
+    for i := 0; i < len(px.peers); i++ {
+      if i == px.me {
+        acceptArgs := &AcceptArgs{}
+        var acceptReply AcceptReply
+
+        acceptArgs.Seq = seq
+        acceptArgs.N = N
+        acceptArgs.Val = v
+
+        px.AcceptNVHandler(acceptArgs, &acceptReply)
+        acceptOKChan <- true
+      } else {
+        go px.sendAccept(seq, N, v, i, acceptOKChan)
+      }
+    }
+
+    okCount = 0
+    notokCount = 0
+
+    for {
+      select {
+      case acceptOK := <- acceptOKChan:
+        if acceptOK {
+          okCount++
+          if okCount >= majority {
+            goto Accept_Get_Result
+          }
+        } else {
+          notokCount++
+          if notokCount >= majority {
+            goto Accept_Get_Result
+          }
+        }
+      default:
+      }
+    }
+
+Accept_Get_Result:
+    if okCount >= majority {
+      DPrintf("majority ACCEPT_OK\n")
+    } else {
+      return
+    }
+
+    //====================== Decide Phase ======================
+
+    for i := 0; i < len(px.peers); i++ {
+      if i == px.me {
+        decideArgs := &DecideArgs{}
+        var decideReply DecideReply
+
+        decideArgs.Seq = seq
+        decideArgs.Val = v
+
+        px.DecideVHandler(decideArgs, &decideReply)
+      } else {
+        go px.sendDecide(seq, v, i)
+      }
+    }
+
+  }
+
+}
+
+func (px *Paxos) ProposeNHandler(proposeArgs *ProposeArgs, proposeReply *ProposeReply) error {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  _, exists := px.instanceMap[proposeArgs.Seq]
+
+  var inst *Instance
+
+  if exists {
+    inst = px.instanceMap[proposeArgs.Seq]
+  } else {
+    inst = &Instance{}
+    inst.seq = proposeArgs.Seq
+  }
+
+  if inst.decided {
+    proposeReply.Message = PROPOSE_REJECT
+    return nil
+  }
+
+  if proposeArgs.N > inst.np {
+    inst.np = proposeArgs.N
+
+    px.instanceMap[proposeArgs.Seq] = inst
+
+    proposeReply.Message = PROPOSE_OK
+    proposeReply.Na = inst.na
+    proposeReply.Va = inst.va
+  } else {
+    proposeReply.Message = PROPOSE_REJECT
+    proposeReply.Np = inst.np
+  }
+
+  return nil
+}
+
+func (px *Paxos) AcceptNVHandler(acceptArgs *AcceptArgs, acceptReply *AcceptReply) error {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  _, exists := px.instanceMap[acceptArgs.Seq]
+
+  var inst *Instance
+
+  if exists {
+    inst = px.instanceMap[acceptArgs.Seq]
+  } else {
+    inst = &Instance{}
+    inst.seq = acceptArgs.Seq
+  }
+
+  if inst.decided {
+    acceptReply.Message = ACCEPT_REJECT
+    return nil
+  }
+
+  if acceptArgs.N >= inst.np {
+    inst.np = acceptArgs.N
+    inst.na = acceptArgs.N
+    inst.va = acceptArgs.Val
+
+    px.instanceMap[acceptArgs.Seq] = inst
+
+    acceptReply.Message = ACCEPT_OK
+    acceptReply.Np = acceptArgs.N
+  } else {
+    acceptReply.Message = ACCEPT_REJECT
+    acceptReply.Np = inst.np
+  }
+
+  return nil
+}
+
+
+func (px *Paxos) DecideVHandler(decideArgs *DecideArgs, decideReply *DecideReply) error {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  _, exists := px.instanceMap[decideArgs.Seq]
+
+  var inst *Instance
+
+  if exists {
+    inst = px.instanceMap[decideArgs.Seq]
+  } else {
+    inst := &Instance{}
+    inst.seq = decideArgs.Seq
+  }
+
+  inst.decided = true
+  inst.va = decideArgs.Val
+
+  px.instanceMap[decideArgs.Seq] = inst
+
+  return nil
 }
 
 
@@ -89,6 +364,8 @@ func call(srv string, name string, args interface{}, reply interface{}) bool {
 //
 func (px *Paxos) Start(seq int, v interface{}) {
   // Your code here.
+  go px.Proposer(seq, v)
+  DPrintf("finish start\n")
 }
 
 //
@@ -99,6 +376,16 @@ func (px *Paxos) Start(seq int, v interface{}) {
 //
 func (px *Paxos) Done(seq int) {
   // Your code here.
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  for k, _ := range px.instanceMap {
+    if k <= seq {
+      delete(px.instanceMap, k)
+    }
+  }
+
+  px.peersDone[px.me] = seq
 }
 
 //
@@ -108,7 +395,18 @@ func (px *Paxos) Done(seq int) {
 //
 func (px *Paxos) Max() int {
   // Your code here.
-  return 0
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  maxSeq := -1;
+
+  for seq, _ := range px.instanceMap {
+    if maxSeq < seq {
+      maxSeq = seq
+    }
+  }
+
+  return maxSeq
 }
 
 //
@@ -141,7 +439,13 @@ func (px *Paxos) Max() int {
 // 
 func (px *Paxos) Min() int {
   // You code here.
-  return 0
+  minDone := math.MaxInt32
+  for i := 0; i < len(px.peersDone); i++ {
+    if minDone > px.peersDone[i] {
+      minDone = px.peersDone[i]
+    }
+  }
+  return minDone + 1
 }
 
 //
@@ -153,9 +457,17 @@ func (px *Paxos) Min() int {
 //
 func (px *Paxos) Status(seq int) (bool, interface{}) {
   // Your code here.
-  return false, nil
-}
+  px.mu.Lock()
+  defer px.mu.Unlock()
 
+  inst, exists := px.instanceMap[seq]
+
+  if !exists || !inst.decided {
+    return false, nil
+  }
+
+  return true, inst.va 
+}
 
 //
 // tell the peer to shut itself down.
@@ -178,9 +490,12 @@ func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
   px := &Paxos{}
   px.peers = peers
   px.me = me
-
-
   // Your initialization code here.
+  px.instanceMap = make(map[int]*Instance)
+  px.peersDone = make([]int, len(peers))
+  for i := 0; i < len(peers); i++ {
+    px.peersDone[i] = -1
+  }
 
   if rpcs != nil {
     // caller will create socket &c
@@ -189,7 +504,7 @@ func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
     rpcs = rpc.NewServer()
     rpcs.Register(px)
 
-    // prepare to receive connections from clients.
+    // Propose to receive connections from clients.
     // change "unix" to "tcp" to use over a network.
     os.Remove(peers[me]) // only needed for "unix"
     l, e := net.Listen("unix", peers[me]);
