@@ -18,6 +18,8 @@ const (
 type ProposeArgs struct {
   Seq int
   N int64
+  MyDone int
+  Me int
 }
 
 type ProposeReply struct {
@@ -25,22 +27,28 @@ type ProposeReply struct {
   Np int64 // filled only when rejected
   Na int64 // filed only when ok
   Va interface{} // filed only when ok
+  MyDone int
 }
 
 type AcceptArgs struct {
   Seq int
   N int64
   Val interface{}
+  MyDone int
+  Me int
 }
 
 type AcceptReply struct {
   Message string
   Np int64
+  MyDone int
 }
 
 type DecideArgs struct {
   Seq int
   Val interface{}
+  MyDone int
+  Me int
 }
 
 type DecideReply struct {

@@ -59,6 +59,25 @@ type Paxos struct {
   // Your data here.
   instanceMap map[int]*Instance
   peersDone []int
+  pdmu sync.Mutex
+}
+
+func (px *Paxos) setPeersDone(i int, seq int) {
+  px.pdmu.Lock()
+  defer px.pdmu.Unlock()
+
+  if px.peersDone[i] <= seq {
+    px.peersDone[i] = seq
+  } else {
+    DPrintf("fuck!!!!!!!!!!! px.peersDone[i]:%v, seq:%v\n", px.peersDone[i], seq)
+  }
+}
+
+func (px *Paxos) getPeersDone(i int) int {
+  px.pdmu.Lock()
+  defer px.pdmu.Unlock()
+
+  return px.peersDone[i]
 }
 
 func (px *Paxos) sendPropose(seq int, N int64, i int, proposeReplyChan chan ProposeReply) {
@@ -67,12 +86,15 @@ func (px *Paxos) sendPropose(seq int, N int64, i int, proposeReplyChan chan Prop
 
   proposeArgs.Seq = seq
   proposeArgs.N = N
+  proposeArgs.MyDone = px.getPeersDone(px.me)
+  proposeArgs.Me = px.me
 
   ok := call(px.peers[i], "Paxos.ProposeNHandler", proposeArgs, &proposeReply)
-  DPrintf("got propose reply %v \n", proposeReply)
+  DPrintf("got propose reply from %v: %v \n", i, proposeReply)
 
   if ok {
-      proposeReplyChan <- proposeReply
+    proposeReplyChan <- proposeReply
+    px.setPeersDone(i, proposeReply.MyDone)
   } else {
     proposeReply.Message = NO_REPLY
     proposeReplyChan <- proposeReply
@@ -87,11 +109,17 @@ func (px *Paxos) sendAccept(seq int, N int64, value interface{}, i int, acceptOK
   acceptArgs.Seq = seq
   acceptArgs.N = N
   acceptArgs.Val = value
+  acceptArgs.MyDone = px.getPeersDone(px.me)
+  acceptArgs.Me = px.me
 
   ok := call(px.peers[i], "Paxos.AcceptNVHandler", acceptArgs, &acceptReply)
+  DPrintf("got propose reply from %v: %v \n", i, acceptReply)
 
   if ok && acceptReply.Message == ACCEPT_OK{
       acceptOKChan <- true
+      px.setPeersDone(i, acceptReply.MyDone)
+  } else if ok && acceptReply.Message == ACCEPT_REJECT{
+      px.setPeersDone(i, acceptReply.MyDone)
   } else {
       acceptOKChan <- false
   }
@@ -103,8 +131,123 @@ func (px *Paxos) sendDecide(seq int, value interface{}, i int) {
 
   decideArgs.Seq = seq
   decideArgs.Val = value
+  decideArgs.MyDone = px.getPeersDone(px.me)
+  decideArgs.Me = px.me
 
   call(px.peers[i], "Paxos.DecideVHandler", decideArgs, &decideReply)
+}
+
+func (px *Paxos) ProposeNHandler(proposeArgs *ProposeArgs, proposeReply *ProposeReply) error {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  if proposeArgs.Me != px.me {
+    px.setPeersDone(proposeArgs.Me, proposeArgs.MyDone)
+  }
+
+  _, exists := px.instanceMap[proposeArgs.Seq]
+
+  var inst *Instance
+
+  if exists {
+    inst = px.instanceMap[proposeArgs.Seq]
+  } else {
+    inst = &Instance{}
+    inst.seq = proposeArgs.Seq
+  }
+
+  if inst.decided {
+    proposeReply.Message = PROPOSE_REJECT
+    return nil
+  }
+
+  if proposeArgs.N > inst.np {
+    inst.np = proposeArgs.N
+
+    px.instanceMap[proposeArgs.Seq] = inst
+
+    proposeReply.Message = PROPOSE_OK
+    proposeReply.Na = inst.na
+    proposeReply.Va = inst.va
+    proposeReply.MyDone = px.getPeersDone(px.me)
+  } else {
+    proposeReply.Message = PROPOSE_REJECT
+    proposeReply.Np = inst.np
+    proposeReply.MyDone = px.getPeersDone(px.me)
+  }
+
+  return nil
+}
+
+func (px *Paxos) AcceptNVHandler(acceptArgs *AcceptArgs, acceptReply *AcceptReply) error {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  if acceptArgs.Me != px.me {
+    px.setPeersDone(acceptArgs.Me, acceptArgs.MyDone)
+  }
+
+  _, exists := px.instanceMap[acceptArgs.Seq]
+
+  var inst *Instance
+
+  if exists {
+    inst = px.instanceMap[acceptArgs.Seq]
+  } else {
+    inst = &Instance{}
+    inst.seq = acceptArgs.Seq
+  }
+
+  if inst.decided {
+    acceptReply.Message = ACCEPT_REJECT
+    return nil
+  }
+
+  if acceptArgs.N >= inst.np {
+    inst.np = acceptArgs.N
+    inst.na = acceptArgs.N
+    inst.va = acceptArgs.Val
+
+    px.instanceMap[acceptArgs.Seq] = inst
+
+    acceptReply.Message = ACCEPT_OK
+    acceptReply.Np = acceptArgs.N
+    acceptReply.MyDone = px.getPeersDone(px.me)
+  } else {
+    acceptReply.Message = ACCEPT_REJECT
+    acceptReply.Np = inst.np
+    acceptReply.MyDone = px.getPeersDone(px.me)
+  }
+
+  return nil
+}
+
+
+func (px *Paxos) DecideVHandler(decideArgs *DecideArgs, decideReply *DecideReply) error {
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  if decideArgs.Me != px.me {
+    px.setPeersDone(decideArgs.Me, decideArgs.MyDone)
+  }
+
+  _, exists := px.instanceMap[decideArgs.Seq]
+
+  var inst *Instance
+
+  if exists {
+    inst = px.instanceMap[decideArgs.Seq]
+  } else {
+    inst = &Instance{}
+    inst.seq = decideArgs.Seq
+  }
+
+  inst.decided = true
+  inst.va = decideArgs.Val
+
+  px.instanceMap[decideArgs.Seq] = inst
+
+  return nil
 }
 
 
@@ -122,7 +265,7 @@ func (px *Paxos) isDecided(seq int) bool {
 }
 
 func (px *Paxos) Proposer(seq int, v interface{}) {
-  for !px.isDecided(seq) {
+  for !px.dead && !px.isDecided(seq) {
     //====================== Propose Phase ======================
     DPrintf("%v: Propose Phase start\n", px.me)
 
@@ -138,6 +281,8 @@ func (px *Paxos) Proposer(seq int, v interface{}) {
 
         proposeArgs.Seq = seq
         proposeArgs.N = N
+        proposeArgs.MyDone = px.getPeersDone(px.me)
+        proposeArgs.Me = px.me
 
         px.ProposeNHandler(proposeArgs, &proposeReply)
         proposeReplyChan <- proposeReply
@@ -182,7 +327,8 @@ Propose_Get_Result:
     if okCount >= majority {
       DPrintf("majority PROPOSE_OK\n")
     } else {
-      return
+      DPrintf("majority PROPOSE_REJECT\n")
+      continue
     }
 
     //====================== Accept Phase ======================
@@ -234,7 +380,8 @@ Accept_Get_Result:
     if okCount >= majority {
       DPrintf("majority ACCEPT_OK\n")
     } else {
-      return
+      DPrintf("majority ACCEPT_REJECT\n")
+      continue
     }
 
     //====================== Decide Phase ======================
@@ -256,104 +403,6 @@ Accept_Get_Result:
   }
 
 }
-
-func (px *Paxos) ProposeNHandler(proposeArgs *ProposeArgs, proposeReply *ProposeReply) error {
-  px.mu.Lock()
-  defer px.mu.Unlock()
-
-  _, exists := px.instanceMap[proposeArgs.Seq]
-
-  var inst *Instance
-
-  if exists {
-    inst = px.instanceMap[proposeArgs.Seq]
-  } else {
-    inst = &Instance{}
-    inst.seq = proposeArgs.Seq
-  }
-
-  if inst.decided {
-    proposeReply.Message = PROPOSE_REJECT
-    return nil
-  }
-
-  if proposeArgs.N > inst.np {
-    inst.np = proposeArgs.N
-
-    px.instanceMap[proposeArgs.Seq] = inst
-
-    proposeReply.Message = PROPOSE_OK
-    proposeReply.Na = inst.na
-    proposeReply.Va = inst.va
-  } else {
-    proposeReply.Message = PROPOSE_REJECT
-    proposeReply.Np = inst.np
-  }
-
-  return nil
-}
-
-func (px *Paxos) AcceptNVHandler(acceptArgs *AcceptArgs, acceptReply *AcceptReply) error {
-  px.mu.Lock()
-  defer px.mu.Unlock()
-
-  _, exists := px.instanceMap[acceptArgs.Seq]
-
-  var inst *Instance
-
-  if exists {
-    inst = px.instanceMap[acceptArgs.Seq]
-  } else {
-    inst = &Instance{}
-    inst.seq = acceptArgs.Seq
-  }
-
-  if inst.decided {
-    acceptReply.Message = ACCEPT_REJECT
-    return nil
-  }
-
-  if acceptArgs.N >= inst.np {
-    inst.np = acceptArgs.N
-    inst.na = acceptArgs.N
-    inst.va = acceptArgs.Val
-
-    px.instanceMap[acceptArgs.Seq] = inst
-
-    acceptReply.Message = ACCEPT_OK
-    acceptReply.Np = acceptArgs.N
-  } else {
-    acceptReply.Message = ACCEPT_REJECT
-    acceptReply.Np = inst.np
-  }
-
-  return nil
-}
-
-
-func (px *Paxos) DecideVHandler(decideArgs *DecideArgs, decideReply *DecideReply) error {
-  px.mu.Lock()
-  defer px.mu.Unlock()
-
-  _, exists := px.instanceMap[decideArgs.Seq]
-
-  var inst *Instance
-
-  if exists {
-    inst = px.instanceMap[decideArgs.Seq]
-  } else {
-    inst := &Instance{}
-    inst.seq = decideArgs.Seq
-  }
-
-  inst.decided = true
-  inst.va = decideArgs.Val
-
-  px.instanceMap[decideArgs.Seq] = inst
-
-  return nil
-}
-
 
 //
 // the application wants paxos to start agreement on
@@ -385,7 +434,7 @@ func (px *Paxos) Done(seq int) {
     }
   }
 
-  px.peersDone[px.me] = seq
+  px.setPeersDone(px.me, seq)
 }
 
 //
