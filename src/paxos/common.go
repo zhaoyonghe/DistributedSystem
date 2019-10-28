@@ -12,6 +12,7 @@ const (
   ACCEPT_OK = "ACCEPT-OK"
   ACCEPT_REJECT = "ACCEPT-REJECT"
   NO_REPLY = "NO-REPLY"
+  DECIDED = "DECIDED"
 )
 
 
@@ -26,7 +27,7 @@ type ProposeReply struct {
   Message string
   Np int64 // filled only when rejected
   Na int64 // filed only when ok
-  Va interface{} // filed only when ok
+  Va interface{} // filed only when ok and decided
   MyDone int
 }
 
@@ -41,6 +42,7 @@ type AcceptArgs struct {
 type AcceptReply struct {
   Message string
   Np int64
+  Va interface{} // filled only when decided
   MyDone int
 }
 

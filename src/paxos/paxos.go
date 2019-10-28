@@ -103,7 +103,7 @@ func (px *Paxos) sendPropose(seq int, N int64, i int, proposeReplyChan chan Prop
 
 }
 
-func (px *Paxos) sendAccept(seq int, N int64, value interface{}, i int, acceptOKChan chan bool) {
+func (px *Paxos) sendAccept(seq int, N int64, value interface{}, i int, acceptReplyChan chan AcceptReply) {
   acceptArgs := &AcceptArgs{}
   var acceptReply AcceptReply
 
@@ -116,14 +116,12 @@ func (px *Paxos) sendAccept(seq int, N int64, value interface{}, i int, acceptOK
   ok := call(px.peers[i], "Paxos.AcceptNVHandler", acceptArgs, &acceptReply)
   DPrintf("%v: seq: %v got propose reply from %v: %v \n", px.me, seq, i, acceptReply)
 
-  if ok && acceptReply.Message == ACCEPT_OK{
-    acceptOKChan <- true
-    px.setPeersDone(i, acceptReply.MyDone)
-  } else if ok && acceptReply.Message == ACCEPT_REJECT{
-    acceptOKChan <- false
+  if ok {
+    acceptReplyChan <- acceptReply
     px.setPeersDone(i, acceptReply.MyDone)
   } else {
-      acceptOKChan <- false
+    acceptReply.Message = NO_REPLY
+    acceptReplyChan <- acceptReply
   }
 }
 
@@ -159,7 +157,8 @@ func (px *Paxos) ProposeNHandler(proposeArgs *ProposeArgs, proposeReply *Propose
   }
 
   if inst.decided {
-    proposeReply.Message = PROPOSE_REJECT
+    proposeReply.Message = DECIDED
+    proposeReply.Va = inst.va
     proposeReply.MyDone = px.getPeersDone(px.me)
     return nil
   }
@@ -202,7 +201,8 @@ func (px *Paxos) AcceptNVHandler(acceptArgs *AcceptArgs, acceptReply *AcceptRepl
   }
 
   if inst.decided {
-    acceptReply.Message = ACCEPT_REJECT
+    acceptReply.Message = DECIDED
+    acceptReply.Va = inst.va
     acceptReply.MyDone = px.getPeersDone(px.me)
     return nil
   }
@@ -246,10 +246,12 @@ func (px *Paxos) DecideVHandler(decideArgs *DecideArgs, decideReply *DecideReply
     inst.seq = decideArgs.Seq
   }
 
-  inst.decided = true
-  inst.va = decideArgs.Val
+  if !inst.decided {
+    inst.decided = true
+    inst.va = decideArgs.Val
+  }
 
-  DPrintf("%v decides on seq: %v, val: %v\n", px.me, decideArgs.Seq, decideArgs.Val)
+  DPrintf("%v decides on seq: %v, val: %v\n", px.me, decideArgs.Seq, inst.va)
 
   px.instanceMap[decideArgs.Seq] = inst
 
@@ -273,9 +275,10 @@ func (px *Paxos) isDecided(seq int) bool {
 func (px *Paxos) Proposer(seq int, v interface{}) {
   for !px.dead && !px.isDecided(seq) {
     //====================== Propose Phase ======================
-    DPrintf("%v: Propose Phase start\n", px.me)
+    DPrintf("%v: seq: %v Propose Phase start\n", px.me, seq)
 
     proposeReplyChan := make(chan ProposeReply, len(px.peers) * 2)
+    acceptReplyChan := make(chan AcceptReply, len(px.peers) * 2)
 
     N := time.Now().UnixNano()
     DPrintf("%v: N: %v, seq: %v, v: %v\n", px.me, N, seq, v)
@@ -318,6 +321,10 @@ func (px *Paxos) Proposer(seq int, v interface{}) {
           if okCount >= majority {
             goto Propose_Get_Result
           }
+        } else if reply.Message == DECIDED {
+          v = reply.Va
+          DPrintf("%v: seq: %v has been decided on %v\n", px.me, seq, v)
+          goto Decided_Phase
         } else {
           notokCount++
           DPrintf("okCount:%v, notokCount:%v, majority:%v\n", okCount, notokCount, majority)
@@ -338,8 +345,7 @@ Propose_Get_Result:
     }
 
     //====================== Accept Phase ======================
-
-    acceptOKChan := make(chan bool, len(px.peers) * 2)
+    DPrintf("%v: seq: %v Accept Phase start\n", px.me, seq)
 
     if replyMaxVa != nil {
       v = replyMaxVa
@@ -357,9 +363,9 @@ Propose_Get_Result:
         acceptArgs.Me = px.me
 
         px.AcceptNVHandler(acceptArgs, &acceptReply)
-        acceptOKChan <- true
+        acceptReplyChan <- acceptReply
       } else {
-        go px.sendAccept(seq, N, v, i, acceptOKChan)
+        go px.sendAccept(seq, N, v, i, acceptReplyChan)
       }
     }
 
@@ -368,12 +374,16 @@ Propose_Get_Result:
 
     for {
       select {
-      case acceptOK := <- acceptOKChan:
-        if acceptOK {
+      case reply := <- acceptReplyChan:
+        if reply.Message == ACCEPT_OK {
           okCount++
           if okCount >= majority {
             goto Accept_Get_Result
           }
+        } else if reply.Message == DECIDED {
+          v = reply.Va
+          DPrintf("%v: seq: %v has been decided on %v\n", px.me, seq, v)
+          goto Decided_Phase
         } else {
           notokCount++
           if notokCount >= majority {
@@ -393,20 +403,23 @@ Accept_Get_Result:
     }
 
     //====================== Decide Phase ======================
+Decided_Phase:
+    DPrintf("%v: seq: %v Decide Phase start\n", px.me, seq)
+    if !px.isDecided(seq) {
+      for i := 0; i < len(px.peers); i++ {
+        if i == px.me {
+          decideArgs := &DecideArgs{}
+          var decideReply DecideReply
 
-    for i := 0; i < len(px.peers); i++ {
-      if i == px.me {
-        decideArgs := &DecideArgs{}
-        var decideReply DecideReply
+          decideArgs.Seq = seq
+          decideArgs.Val = v
+          decideArgs.MyDone = px.getPeersDone(px.me)
+          decideArgs.Me = px.me
 
-        decideArgs.Seq = seq
-        decideArgs.Val = v
-        decideArgs.MyDone = px.getPeersDone(px.me)
-        decideArgs.Me = px.me
-
-        px.DecideVHandler(decideArgs, &decideReply)
-      } else {
-        go px.sendDecide(seq, v, i)
+          px.DecideVHandler(decideArgs, &decideReply)
+        } else {
+          go px.sendDecide(seq, v, i)
+        }
       }
     }
 
