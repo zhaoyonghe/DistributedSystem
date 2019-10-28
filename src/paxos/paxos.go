@@ -31,7 +31,7 @@ import "math/rand"
 import "time"
 import "math"
 
-const Debug = 1
+const Debug = 0
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
   if Debug > 0 {
@@ -56,7 +56,7 @@ type Paxos struct {
   rpcCount int
   peers []string
   me int // index into peers[]
-  
+
   // Your data here.
   instanceMap map[int]*Instance
   peersDone []int
@@ -70,7 +70,7 @@ func (px *Paxos) setPeersDone(i int, seq int) {
   if px.peersDone[i] <= seq {
     px.peersDone[i] = seq
   } else {
-    DPrintf("fuck!!!!!!!!!!! px.peersDone[i]:%v, seq:%v\n", px.peersDone[i], seq)
+    DPrintf("panic!!!!!!!!!!! px.peersDone[i]:%v, seq:%v\n", px.peersDone[i], seq)
     //panic("ds")
   }
 }
@@ -342,6 +342,8 @@ Propose_Get_Result:
       DPrintf("%v: seq: %v, majority PROPOSE_OK\n", px.me, seq)
     } else {
       DPrintf("%v: seq: %v, majority PROPOSE_REJECT\n", px.me, seq)
+      DPrintf("sleeping.............\n")
+      time.Sleep(time.Duration(rand.Int63() % 200) * time.Millisecond)
       continue
     }
 
@@ -400,6 +402,8 @@ Accept_Get_Result:
       DPrintf("%v: seq: %v, majority ACCEPT_OK\n", px.me, seq)
     } else {
       DPrintf("%v: seq: %v, majority ACCEPT_REJECT\n", px.me, seq)
+      DPrintf("sleeping.............\n")
+      time.Sleep(time.Duration(rand.Int63() % 200) * time.Millisecond)
       continue
     }
 
