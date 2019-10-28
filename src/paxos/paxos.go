@@ -56,6 +56,7 @@ type Paxos struct {
   rpcCount int
   peers []string
   me int // index into peers[]
+  
   // Your data here.
   instanceMap map[int]*Instance
   peersDone []int
