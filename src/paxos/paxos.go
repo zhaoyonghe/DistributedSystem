@@ -343,7 +343,7 @@ Propose_Get_Result:
     } else {
       DPrintf("%v: seq: %v, majority PROPOSE_REJECT\n", px.me, seq)
       DPrintf("sleeping.............\n")
-      time.Sleep(time.Duration(rand.Int63() % 200) * time.Millisecond)
+      time.Sleep(time.Duration(rand.Int63() % 300) * time.Millisecond)
       continue
     }
 
@@ -403,7 +403,7 @@ Accept_Get_Result:
     } else {
       DPrintf("%v: seq: %v, majority ACCEPT_REJECT\n", px.me, seq)
       DPrintf("sleeping.............\n")
-      time.Sleep(time.Duration(rand.Int63() % 200) * time.Millisecond)
+      time.Sleep(time.Duration(rand.Int63() % 300) * time.Millisecond)
       continue
     }
 
