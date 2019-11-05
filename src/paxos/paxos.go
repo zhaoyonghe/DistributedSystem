@@ -29,7 +29,7 @@ import "sync"
 import "fmt"
 import "math/rand"
 import "time"
-import "math"
+
 
 const Debug = 0
 
@@ -441,6 +441,9 @@ Decided_Phase:
 //
 func (px *Paxos) Start(seq int, v interface{}) {
   // Your code here.
+  if seq < px.Min() {
+    return
+  }
   go px.Proposer(seq, v)
   DPrintf("finish start\n")
 }
@@ -453,15 +456,6 @@ func (px *Paxos) Start(seq int, v interface{}) {
 //
 func (px *Paxos) Done(seq int) {
   // Your code here.
-  px.mu.Lock()
-  defer px.mu.Unlock()
-
-  for k, _ := range px.instanceMap {
-    if k <= seq {
-      delete(px.instanceMap, k)
-    }
-  }
-
   px.setPeersDone(px.me, seq)
 }
 
@@ -516,12 +510,24 @@ func (px *Paxos) Max() int {
 // 
 func (px *Paxos) Min() int {
   // You code here.
-  minDone := math.MaxInt32
+
+  px.mu.Lock()
+  defer px.mu.Unlock()
+
+  minDone := px.peersDone[px.me]
   for i := 0; i < len(px.peersDone); i++ {
     if minDone > px.peersDone[i] {
       minDone = px.peersDone[i]
     }
   }
+
+
+  for k, _ := range px.instanceMap {
+    if k <= minDone {
+      delete(px.instanceMap, k)
+    }
+  }
+
   return minDone + 1
 }
 
@@ -534,6 +540,10 @@ func (px *Paxos) Min() int {
 //
 func (px *Paxos) Status(seq int) (bool, interface{}) {
   // Your code here.
+  if seq < px.Min() {
+    return false, nil
+  }
+
   px.mu.Lock()
   defer px.mu.Unlock()
 

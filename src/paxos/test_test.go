@@ -19,8 +19,6 @@ func port(tag string, host int) string {
   return s
 }
 
-// return how many paxos peers have been decided on -seq- instance.
-// check whether or not the decided values are same.
 func ndecided(t *testing.T, pxa []*Paxos, seq int) int {
   count := 0
   var v interface{}
@@ -40,7 +38,6 @@ func ndecided(t *testing.T, pxa []*Paxos, seq int) int {
   return count
 }
 
-// Wait until -wanted- paxos peers decided on -seq- instatnse.
 func waitn(t *testing.T, pxa[]*Paxos, seq int, wanted int) {
   to := 10 * time.Millisecond
   for iters := 0; iters < 30; iters++ {

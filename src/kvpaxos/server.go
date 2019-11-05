@@ -10,6 +10,8 @@ import "os"
 import "syscall"
 import "encoding/gob"
 import "math/rand"
+import "time"
+import "strconv"
 
 const Debug=0
 
@@ -25,6 +27,12 @@ type Op struct {
   // Your definitions here.
   // Field names must start with capital letters,
   // otherwise RPC will break.
+  OpType string
+  Key string
+  Value string
+  DoHash bool
+  UID int64
+  ClientID int64
 }
 
 type KVPaxos struct {
@@ -34,18 +42,133 @@ type KVPaxos struct {
   dead bool // for testing
   unreliable bool // for testing
   px *paxos.Paxos
-
   // Your definitions here.
+  kvMap map[string]string
+  uidMap map[int64]int64
+  replyMap map[int64]interface{}
+  maxSeq int
 }
 
+func (kv *KVPaxos) wait(seq int) Op {
+  to := 10 * time.Millisecond
+  for {
+    decided, v := kv.px.Status(seq)
+    if decided {
+      return v.(Op)
+    }
+    time.Sleep(to)
+    if to < 10 * time.Second {
+      to *= 2
+    }
+  }
+}
+
+func (kv *KVPaxos) executeOp(op Op) interface{} {
+  for {
+    // if has been done before
+    uid, exists := kv.uidMap[op.ClientID]
+    if exists && uid == op.UID {
+      return kv.replyMap[op.ClientID]
+    }
+
+    // has not been done before
+    // try to catch up, let majority agree with and execute this operation
+    kv.maxSeq++
+
+    decided, v := kv.px.Status(kv.maxSeq)
+
+    var result Op
+    if decided {
+      // lag behind, need to catch up
+      result = v.(Op)
+    } else {
+      // do not lag behind, try to agree with this operation
+      kv.px.Start(kv.maxSeq, op)
+      result = kv.wait(kv.maxSeq)
+    }
+
+    // execute result operation
+    value, exists := kv.kvMap[result.Key]
+
+    if result.OpType == Put {
+      var reply PutReply
+      if result.DoHash {
+        kv.kvMap[result.Key] = strconv.Itoa(int(hash(value + result.Value)))
+        reply.Err = OK
+        if exists {
+          reply.PreviousValue = value
+        } else {
+          reply.PreviousValue = ""
+        }
+      } else {
+        kv.kvMap[result.Key] = result.Value
+        reply.Err = OK
+        reply.PreviousValue = ""
+      }
+      kv.uidMap[result.ClientID] = result.UID
+      kv.replyMap[result.ClientID] = reply
+    } else {
+      // op.OpType == Get
+      var reply GetReply
+      if exists {
+        reply.Err = OK
+        reply.Value = value
+      } else {
+        reply.Err = ErrNoKey
+        reply.Value = ""
+      } 
+      kv.uidMap[result.ClientID] = result.UID
+      kv.replyMap[result.ClientID] = reply
+    }
+
+    kv.px.Done(kv.maxSeq)
+
+    if result.UID == op.UID {
+      // majority has agreed with this operation
+      // successfully catch up and execute this operation
+      // same as return kv.replyMap[result.ClientID]
+      return kv.replyMap[op.ClientID]
+    }
+  }
+
+}
 
 func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
   // Your code here.
+  kv.mu.Lock()
+  defer kv.mu.Unlock()
+  var op Op
+
+  op.OpType = Get
+  op.Key = args.Key
+  op.UID = args.UID
+  op.ClientID = args.ClientID
+
+  reply1 := kv.executeOp(op).(GetReply)
+
+  reply.Err = reply1.Err
+  reply.Value = reply1.Value
+
   return nil
 }
 
 func (kv *KVPaxos) Put(args *PutArgs, reply *PutReply) error {
   // Your code here.
+  kv.mu.Lock()
+  defer kv.mu.Unlock()
+  var op Op
+
+  op.OpType = Put
+  op.Key = args.Key
+  op.UID = args.UID
+  op.ClientID = args.ClientID
+  op.Value = args.Value
+  op.DoHash = args.DoHash
+
+  reply1 := kv.executeOp(op).(PutReply)
+
+  reply.Err = reply1.Err
+  reply.PreviousValue = reply1.PreviousValue
 
   return nil
 }
@@ -72,8 +195,12 @@ func StartServer(servers []string, me int) *KVPaxos {
 
   kv := new(KVPaxos)
   kv.me = me
-
   // Your initialization code here.
+  kv.kvMap = make(map[string] string)
+  kv.uidMap = make(map[int64] int64)
+  kv.replyMap = make(map[int64] interface{})
+  kv.maxSeq = 0
+
 
   rpcs := rpc.NewServer()
   rpcs.Register(kv)
