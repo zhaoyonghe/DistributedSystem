@@ -93,7 +93,11 @@ func (kv *KVPaxos) executeOp(op Op) interface{} {
     if result.OpType == Put {
       var reply PutReply
       if result.DoHash {
-        kv.kvMap[result.Key] = strconv.Itoa(int(hash(value + result.Value)))
+        if exists {
+          kv.kvMap[result.Key] = strconv.Itoa(int(hash(value + result.Value)))
+        } else {
+          kv.kvMap[result.Key] = strconv.Itoa(int(hash("" + result.Value)))
+        }
         reply.Err = OK
         if exists {
           reply.PreviousValue = value

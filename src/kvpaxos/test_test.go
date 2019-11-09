@@ -39,6 +39,44 @@ func NextValue(hprev string, val string) string {
   return strconv.Itoa(int(h))
 }
 
+func pp(tag string, src int, dst int) string {
+  s := "/var/tmp/824-"
+  s += strconv.Itoa(os.Getuid()) + "/"
+  s += "kv-" + tag + "-"
+  s += strconv.Itoa(os.Getpid()) + "-"
+  s += strconv.Itoa(src) + "-"
+  s += strconv.Itoa(dst)
+  return s
+}
+
+func cleanpp(tag string, n int) {
+  for i := 0; i < n; i++ {
+    for j := 0; j < n; j++ {
+      ij := pp(tag, i, j)
+      os.Remove(ij)
+    }
+  }
+}
+
+func part(t *testing.T, tag string, npaxos int, p1 []int, p2 []int, p3 []int) {
+  cleanpp(tag, npaxos)
+
+  pa := [][]int{p1, p2, p3}
+  for pi := 0; pi < len(pa); pi++ {
+    p := pa[pi]
+    for i := 0; i < len(p); i++ {
+      for j := 0; j < len(p); j++ {
+        ij := pp(tag, p[i], p[j])
+        pj := port(tag, p[j])
+        err := os.Link(pj, ij)
+        if err != nil {
+          t.Fatalf("os.Link(%v, %v): %v\n", pj, ij, err)
+        }
+      }
+    }
+  }
+}
+
 func TestBasic(t *testing.T) {
   runtime.GOMAXPROCS(4)
 
@@ -184,44 +222,6 @@ func TestDone(t *testing.T) {
   }
 
   fmt.Printf("  ... Passed\n")
-}
-
-func pp(tag string, src int, dst int) string {
-  s := "/var/tmp/824-"
-  s += strconv.Itoa(os.Getuid()) + "/"
-  s += "kv-" + tag + "-"
-  s += strconv.Itoa(os.Getpid()) + "-"
-  s += strconv.Itoa(src) + "-"
-  s += strconv.Itoa(dst)
-  return s
-}
-
-func cleanpp(tag string, n int) {
-  for i := 0; i < n; i++ {
-    for j := 0; j < n; j++ {
-      ij := pp(tag, i, j)
-      os.Remove(ij)
-    }
-  }
-}
-
-func part(t *testing.T, tag string, npaxos int, p1 []int, p2 []int, p3 []int) {
-  cleanpp(tag, npaxos)
-
-  pa := [][]int{p1, p2, p3}
-  for pi := 0; pi < len(pa); pi++ {
-    p := pa[pi]
-    for i := 0; i < len(p); i++ {
-      for j := 0; j < len(p); j++ {
-        ij := pp(tag, p[i], p[j])
-        pj := port(tag, p[j])
-        err := os.Link(pj, ij)
-        if err != nil {
-          t.Fatalf("os.Link(%v, %v): %v\n", pj, ij, err)
-        }
-      }
-    }
-  }
 }
 
 func TestPartition(t *testing.T) {

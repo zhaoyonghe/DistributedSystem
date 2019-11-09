@@ -4,7 +4,7 @@ import "net/rpc"
 import "fmt"
 import "crypto/rand"
 import "math/big"
-import "time"
+//import "time"
 
 type Clerk struct {
   servers []string
@@ -73,15 +73,16 @@ func (ck *Clerk) Get(key string) string {
     
     var reply GetReply
 
-    ok := call(ck.servers[i], "KVPaxos.Get", args, &reply)
-
-    if ok {
-      return reply.Value
+    for j := 0; j < 10; j++ {
+      ok := call(ck.servers[i], "KVPaxos.Get", args, &reply)
+      if ok {
+        return reply.Value
+      } 
     }
 
     i = (i + 1) % nServer
 
-    time.Sleep(time.Second)
+    //time.Sleep(time.Millisecond * 200)
   }
 
 }
@@ -105,15 +106,16 @@ func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
     args.ClientID = ck.ckid
     
     var reply PutReply
-
-    ok := call(ck.servers[i], "KVPaxos.Put", args, &reply)
-    if ok && reply.Err == OK {
-      return reply.PreviousValue
+    for j := 0; j < 10; j++ {
+      ok := call(ck.servers[i], "KVPaxos.Put", args, &reply)
+      if ok && reply.Err == OK {
+        return reply.PreviousValue
+      }     
     }
 
     i = (i + 1) % nServer
 
-    time.Sleep(time.Second)
+    //time.Sleep(time.Millisecond * 200)
   }
 }
 
