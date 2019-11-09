@@ -4,7 +4,6 @@ import "net/rpc"
 import "fmt"
 import "crypto/rand"
 import "math/big"
-//import "time"
 
 type Clerk struct {
   servers []string
@@ -81,8 +80,6 @@ func (ck *Clerk) Get(key string) string {
     }
 
     i = (i + 1) % nServer
-
-    //time.Sleep(time.Millisecond * 200)
   }
 
 }
@@ -114,8 +111,6 @@ func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
     }
 
     i = (i + 1) % nServer
-
-    //time.Sleep(time.Millisecond * 200)
   }
 }
 
