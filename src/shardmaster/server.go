@@ -157,8 +157,9 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
           // group id -> [shard1, shard2, ...]
           var groupsShards = make(map[int64][]int)
           for i := 0; i < NShards; i++ {
-            groupsShards[op.Shards[i]] = append(groupsShards[op.Shards[i]], i)
+            groupsShards[curConfig.Shards[i]] = append(groupsShards[curConfig.Shards[i]], i)
           }
+          DPrintf("%v\n", groupsShards)
 
           minShards := NShards / (groupsNum + 1)
           maxShards := minShards
@@ -189,8 +190,8 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
       }
       
       op.Groups = make(map[int64][]string)
-      for key, value := range curConfig.Groups {
-        op.Groups[key] = value
+      for gid, servers := range curConfig.Groups {
+        op.Groups[gid] = servers
       }
       op.Groups[args.GID] = args.Servers
     }
@@ -229,16 +230,116 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
       continue
     } else {
       // do not lag behind, try to agree with this operation
+      var curConfig = sm.configs[len(sm.configs) - 1]
+
+      op.Num = nextNum
+      op.OpType = LEAVE
+
+      _, exists := curConfig.Groups[args.GID]
+      if !exists {
+        // leave a group that current config does not have
+        op.Shards = curConfig.Shards
+      } else {
+        // leave a group that current config does not has
+        groupsNum := len(curConfig.Groups)
+        if groupsNum == 1 {
+          // last leave
+          for i := 0; i < NShards; i++ {
+            op.Shards[i] = 0
+          }
+        } else {
+          // groupsNum > 1
+          // group id -> [shard1, shard2, ...]
+          var groupsShards = make(map[int64][]int)
+          var leaveGroupShards = []int{}
+          for i := 0; i < NShards; i++ {
+            if curConfig.Shards[i] == args.GID {
+              leaveGroupShards = append(leaveGroupShards, i)
+            } else {
+              groupsShards[curConfig.Shards[i]] = append(groupsShards[curConfig.Shards[i]], i)
+            }
+          }
+          DPrintf("%v\n", leaveGroupShards)
+          DPrintf("%v\n", groupsShards)
+
+          minShards := NShards / (groupsNum - 1)
+          maxShards := minShards
+          if NShards % (groupsNum - 1) != 0 {
+            maxShards += 1
+          }
+
+          // rebalance
+          for gid, shards := range groupsShards {
+            temp := len(leaveGroupShards) - (maxShards - len(shards))
+            if temp > 0 {
+              groupsShards[gid] = append(shards, leaveGroupShards[temp:len(leaveGroupShards)]...)
+              DPrintf("kkkk%v\n", shards)
+            } else {
+              groupsShards[gid] = append(shards, leaveGroupShards[0:len(leaveGroupShards)]...)
+              DPrintf("kkkk%v\n", shards)
+              break
+            }
+          }
+
+          for gid, shards := range groupsShards {
+            DPrintf("dick\n")
+            for i := 0; i < len(shards); i++ {
+              DPrintf("di %v, %v\n", gid, i)
+              op.Shards[shards[i]] = gid
+            }
+            DPrintf("%v\n", op.Shards)
+          }
+        }
+      }
+
+      op.Groups = make(map[int64][]string)
+      for gid, servers := range curConfig.Groups {
+        if gid != args.GID {
+          op.Groups[gid] = servers
+        }
+      }
+    }
+
+    sm.px.Start(nextNum, op)
+    result := sm.wait(nextNum)
+
+    sm.configs = append(sm.configs, *buildConfig(result))
+    sm.px.Done(nextNum)
+
+    if checkSameOp(op, result) {
+      return nil
     }
   }
-
-  return nil
 }
 
 func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
-  // Your code here.
+  sm.mu.Lock()
+  defer sm.mu.Unlock()
 
-  return nil
+  for {
+    var nextNum = len(sm.configs)
+    decided, v := sm.px.Status(nextNum) 
+
+    var op Op
+    if decided {
+      // lag behind, need to catch up
+      op = v.(Op)
+
+      // build new config to catch up
+      var config = *buildConfig(op)
+
+      sm.configs = append(sm.configs, config)
+
+      sm.px.Done(nextNum)
+      continue
+    } else {
+      // do not lag behind, try to agree with this operation
+      var curConfig = sm.configs[len(sm.configs) - 1]
+
+      op.Num = nextNum
+      op.OpType = LEAVE
+    }
+  }
 }
 
 func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) error {
