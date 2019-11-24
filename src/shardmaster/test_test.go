@@ -8,6 +8,11 @@ import "os"
 import "fmt"
 import "math/rand"
 
+func printLastConfig(ck *Clerk) {
+  c := ck.Query(-1)
+  DPrintf("%v\n", c)
+}
+
 func port(tag string, host int) string {
   s := "/var/tmp/824-"
   s += strconv.Itoa(os.Getuid()) + "/"
@@ -108,6 +113,7 @@ func TestBasic(t *testing.T) {
   check(t, []int64{gid1}, ck)
   cfa[1] = ck.Query(-1)
 
+
   var gid2 int64 = 2
   ck.Join(gid2, []string{"a", "b", "c"})
   check(t, []int64{gid1,gid2}, ck)
@@ -120,11 +126,11 @@ func TestBasic(t *testing.T) {
   cfx := ck.Query(-1)
   sa1 := cfx.Groups[gid1]
   if len(sa1) != 3 || sa1[0] != "x" || sa1[1] != "y" || sa1[2] != "z" {
-    t.Fatal("wrong servers for gid %v: %v\n", gid1, sa1)
+    t.Fatalf("wrong servers for gid %v: %v\n", gid1, sa1)
   }
   sa2 := cfx.Groups[gid2]
   if len(sa2) != 3 || sa2[0] != "a" || sa2[1] != "b" || sa2[2] != "c" {
-    t.Fatal("wrong servers for gid %v: %v\n", gid2, sa2)
+    t.Fatalf("wrong servers for gid %v: %v\n", gid2, sa2)
   }
 
   ck.Leave(gid1)
