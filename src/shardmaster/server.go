@@ -123,6 +123,7 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
 
     var op Op
     if decided {
+      DPrintf("MOVE&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
       // lag behind, need to catch up
       op = v.(Op)
 
@@ -152,6 +153,9 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
           for i := 0; i < NShards; i++ {
             op.Shards[i] = args.GID
           }
+        } else if groupsNum == NShards {
+          // no available shards
+          op.Shards = curConfig.Shards
         } else {
           // groupsNum > 0
           // group id -> [shard1, shard2, ...]
@@ -218,6 +222,7 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
 
     var op Op
     if decided {
+      DPrintf("MOVE&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
       // lag behind, need to catch up
       op = v.(Op)
 
@@ -240,7 +245,7 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
         // leave a group that current config does not have
         op.Shards = curConfig.Shards
       } else {
-        // leave a group that current config does not has
+        // leave a group that current config has
         groupsNum := len(curConfig.Groups)
         if groupsNum == 1 {
           // last leave
@@ -252,6 +257,11 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
           // group id -> [shard1, shard2, ...]
           var groupsShards = make(map[int64][]int)
           var leaveGroupShards = []int{}
+          for gid, _ := range curConfig.Groups {
+            if gid != args.GID {
+              groupsShards[gid] = []int{}
+            }
+          }
           for i := 0; i < NShards; i++ {
             if curConfig.Shards[i] == args.GID {
               leaveGroupShards = append(leaveGroupShards, i)
@@ -271,6 +281,9 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
           // rebalance
           for gid, shards := range groupsShards {
             temp := len(leaveGroupShards) - (maxShards - len(shards))
+            DPrintf("asd%v\nasd%v\n", leaveGroupShards, groupsShards)
+            DPrintf("temp: %v; len(l): %v, maxShards:%v, len(s): %v, groupsNum: %v", 
+            temp, len(leaveGroupShards), maxShards, len(shards), groupsNum)
             if temp > 0 {
               groupsShards[gid] = append(shards, leaveGroupShards[temp:len(leaveGroupShards)]...)
               DPrintf("kkkk%v\n", shards)
@@ -322,6 +335,7 @@ func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
 
     var op Op
     if decided {
+      DPrintf("MOVE&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
       // lag behind, need to catch up
       op = v.(Op)
 
@@ -337,19 +351,40 @@ func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
       var curConfig = sm.configs[len(sm.configs) - 1]
 
       op.Num = nextNum
-      op.OpType = LEAVE
+      op.OpType = MOVE
+      op.Shards = curConfig.Shards
+
+      _, exists := curConfig.Groups[args.GID]
+      if exists {
+        op.Shards[args.Shard] = args.GID
+      }
+
+      op.Groups = make(map[int64][]string)
+      for gid, servers := range curConfig.Groups {
+          op.Groups[gid] = servers
+      }
+    }
+
+    sm.px.Start(nextNum, op)
+    result := sm.wait(nextNum)
+
+    sm.configs = append(sm.configs, *buildConfig(result))
+    sm.px.Done(nextNum)
+
+    if checkSameOp(op, result) {
+      return nil
     }
   }
 }
 
 func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) error {
-  // Your code here.
   sm.mu.Lock()
   defer sm.mu.Unlock()
 
   for {
     var nextNum = len(sm.configs)
     decided, v := sm.px.Status(nextNum)
+    DPrintf("decided: %v, v: %v\n", decided, v)
 
     var op Op
     if decided {
@@ -365,11 +400,12 @@ func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) error {
       continue 
     } else {
       // do not lag behind, server the query
-      if args.Num == -1 {
-        reply.Config = sm.configs[len(sm.configs) - 1]
+      DPrintf("hhhhhh%v\n", sm.configs)
+      if args.Num == -1 || args.Num >= len(sm.configs) {
+        reply.Config = *copyConfig(sm.configs[len(sm.configs) - 1])
       } else {
-        if args.Num < len(sm.configs) {
-          reply.Config = sm.configs[args.Num]
+        if args.Num < len(sm.configs) && args.Num >= 0 {
+          reply.Config = *copyConfig(sm.configs[args.Num])
         }
       }
       return nil

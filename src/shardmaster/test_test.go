@@ -6,11 +6,11 @@ import "strconv"
 import "os"
 // import "time"
 import "fmt"
-//import "math/rand"
+import "math/rand"
 
-func printLastConfig(ck *Clerk) {
-  c := ck.Query(-1)
-  DPrintf("%v\n", c)
+func printLastConfig(ck *Clerk, num int) {
+  c := ck.Query(num)
+  DPrintf("jgfdf%v\n", c)
 }
 
 func port(tag string, host int) string {
@@ -122,7 +122,7 @@ func TestBasic(t *testing.T) {
   ck.Join(gid2, []string{"a", "b", "c"})
   check(t, []int64{gid1,gid2}, ck)
   cfa[3] = ck.Query(-1)
-  printLastConfig(ck)
+  printLastConfig(ck, -1)
 
   cfx := ck.Query(-1)
   sa1 := cfx.Groups[gid1]
@@ -133,9 +133,9 @@ func TestBasic(t *testing.T) {
   if len(sa2) != 3 || sa2[0] != "a" || sa2[1] != "b" || sa2[2] != "c" {
     t.Fatalf("wrong servers for gid %v: %v\n", gid2, sa2)
   }
-  printLastConfig(ck)
+  printLastConfig(ck, -1)
   ck.Leave(gid1)
-  printLastConfig(ck)
+  printLastConfig(ck, -1)
   check(t, []int64{gid2}, ck)
   cfa[4] = ck.Query(-1)
 
@@ -239,6 +239,8 @@ func TestBasic(t *testing.T) {
   for i := 0; i < npara; i++ {
     <- ca[i]
   }
+  DPrintf("++++++++++++++\n")
+  printLastConfig(ck, -1)
   check(t, gids, ck)
 
   fmt.Printf("  ... Passed\n")
@@ -290,7 +292,7 @@ func TestBasic(t *testing.T) {
 
   fmt.Printf("  ... Passed\n")
 }
-/*
+
 func TestUnreliable(t *testing.T) {
   runtime.GOMAXPROCS(4)
 
@@ -368,6 +370,13 @@ func TestFreshQuery(t *testing.T) {
   ck0 := MakeClerk([]string{portx})
 
   ck1.Join(1001, []string{"a", "b", "c"})
+  ck1.Join(1002, []string{"a", "b", "c"})
+  ck1.Join(1003, []string{"a", "b", "c"})
+  printLastConfig(ck1, 0)
+  printLastConfig(ck1, 1)
+  printLastConfig(ck1, 2)
+  printLastConfig(ck1, 3)
+
   c := ck0.Query(-1)
   _, ok := c.Groups[1001]
   if ok == false {
@@ -377,4 +386,3 @@ func TestFreshQuery(t *testing.T) {
   fmt.Printf("  ... Passed\n")
   os.Remove(portx)
 }
-*/
