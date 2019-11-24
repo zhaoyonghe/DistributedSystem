@@ -370,12 +370,12 @@ func TestFreshQuery(t *testing.T) {
   ck0 := MakeClerk([]string{portx})
 
   ck1.Join(1001, []string{"a", "b", "c"})
-  ck1.Join(1002, []string{"a", "b", "c"})
-  ck1.Join(1003, []string{"a", "b", "c"})
-  printLastConfig(ck1, 0)
-  printLastConfig(ck1, 1)
-  printLastConfig(ck1, 2)
-  printLastConfig(ck1, 3)
+  //ck1.Join(1002, []string{"a", "b", "c"})
+  //ck1.Join(1003, []string{"a", "b", "c"})
+  //printLastConfig(ck1, 0)
+  //printLastConfig(ck1, 1)
+  //printLastConfig(ck1, 2)
+  //printLastConfig(ck1, 3)
 
   c := ck0.Query(-1)
   _, ok := c.Groups[1001]

@@ -38,6 +38,7 @@ type ShardMaster struct {
   px *paxos.Paxos
 
   configs []Config // indexed by config num
+  maxSeq int
 }
 
 func (sm *ShardMaster) wait(seq int) Op {
@@ -56,6 +57,7 @@ func (sm *ShardMaster) wait(seq int) Op {
 
 type Op struct {
   // Your data here.
+  Seq int
   Num int
   OpType string
   Shards [NShards]int64
@@ -63,6 +65,10 @@ type Op struct {
 }
 
 func checkSameOp(op1 Op, op2 Op) bool {
+  if op1.Seq != op2.Seq {
+    return false
+  }
+
   if op1.Num != op2.Num {
     return false
   }
@@ -118,26 +124,30 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
   defer sm.mu.Unlock()
 
   for {
-    var nextNum = len(sm.configs)
-    decided, v := sm.px.Status(nextNum) 
+    sm.maxSeq += 1
+
+    decided, v := sm.px.Status(sm.maxSeq) 
 
     var op Op
     if decided {
-      DPrintf("MOVE&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
+      DPrintf("JOIN&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
       // lag behind, need to catch up
       op = v.(Op)
 
       // build new config to catch up
-      var config = *buildConfig(op)
+      if op.OpType != QUERY {
+        var config = *buildConfig(op)
+        sm.configs = append(sm.configs, config)
+      }
 
-      sm.configs = append(sm.configs, config)
-
-      sm.px.Done(nextNum)
+      sm.px.Done(sm.maxSeq)
       continue
     } else {
       // do not lag behind, try to agree with this operation
+      var nextNum = len(sm.configs)
       var curConfig = sm.configs[len(sm.configs) - 1]
 
+      op.Seq = sm.maxSeq
       op.Num = nextNum
       op.OpType = JOIN
 
@@ -200,11 +210,11 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
       op.Groups[args.GID] = args.Servers
     }
 
-    sm.px.Start(nextNum, op)
-    result := sm.wait(nextNum)
+    sm.px.Start(sm.maxSeq, op)
+    result := sm.wait(sm.maxSeq)
 
     sm.configs = append(sm.configs, *buildConfig(result))
-    sm.px.Done(nextNum)
+    sm.px.Done(sm.maxSeq)
 
     if checkSameOp(op, result) {
       return nil
@@ -217,26 +227,30 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
   defer sm.mu.Unlock()
 
   for {
-    var nextNum = len(sm.configs)
-    decided, v := sm.px.Status(nextNum) 
+    sm.maxSeq += 1
+
+    decided, v := sm.px.Status(sm.maxSeq) 
 
     var op Op
     if decided {
-      DPrintf("MOVE&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
+      DPrintf("LEAVE&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n")
       // lag behind, need to catch up
       op = v.(Op)
 
       // build new config to catch up
-      var config = *buildConfig(op)
+      if op.OpType != QUERY {
+        var config = *buildConfig(op)
+        sm.configs = append(sm.configs, config)      
+      }
 
-      sm.configs = append(sm.configs, config)
-
-      sm.px.Done(nextNum)
+      sm.px.Done(sm.maxSeq)
       continue
     } else {
       // do not lag behind, try to agree with this operation
+      var nextNum = len(sm.configs)
       var curConfig = sm.configs[len(sm.configs) - 1]
 
+      op.Seq = sm.maxSeq
       op.Num = nextNum
       op.OpType = LEAVE
 
@@ -269,8 +283,8 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
               groupsShards[curConfig.Shards[i]] = append(groupsShards[curConfig.Shards[i]], i)
             }
           }
-          DPrintf("%v\n", leaveGroupShards)
-          DPrintf("%v\n", groupsShards)
+          //DPrintf("%v\n", leaveGroupShards)
+          //DPrintf("%v\n", groupsShards)
 
           minShards := NShards / (groupsNum - 1)
           maxShards := minShards
@@ -281,26 +295,26 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
           // rebalance
           for gid, shards := range groupsShards {
             temp := len(leaveGroupShards) - (maxShards - len(shards))
-            DPrintf("asd%v\nasd%v\n", leaveGroupShards, groupsShards)
-            DPrintf("temp: %v; len(l): %v, maxShards:%v, len(s): %v, groupsNum: %v", 
-            temp, len(leaveGroupShards), maxShards, len(shards), groupsNum)
+            //DPrintf("asd%v\nasd%v\n", leaveGroupShards, groupsShards)
+            //DPrintf("temp: %v; len(l): %v, maxShards:%v, len(s): %v, groupsNum: %v", 
+            //temp, len(leaveGroupShards), maxShards, len(shards), groupsNum)
             if temp > 0 {
               groupsShards[gid] = append(shards, leaveGroupShards[temp:len(leaveGroupShards)]...)
-              DPrintf("kkkk%v\n", shards)
+              //DPrintf("kkkk%v\n", shards)
             } else {
               groupsShards[gid] = append(shards, leaveGroupShards[0:len(leaveGroupShards)]...)
-              DPrintf("kkkk%v\n", shards)
+              //DPrintf("kkkk%v\n", shards)
               break
             }
           }
 
           for gid, shards := range groupsShards {
-            DPrintf("dick\n")
+            //DPrintf("PPPP\n")
             for i := 0; i < len(shards); i++ {
-              DPrintf("di %v, %v\n", gid, i)
+              //DPrintf("di %v, %v\n", gid, i)
               op.Shards[shards[i]] = gid
             }
-            DPrintf("%v\n", op.Shards)
+            //DPrintf("%v\n", op.Shards)
           }
         }
       }
@@ -313,11 +327,11 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
       }
     }
 
-    sm.px.Start(nextNum, op)
-    result := sm.wait(nextNum)
+    sm.px.Start(sm.maxSeq, op)
+    result := sm.wait(sm.maxSeq)
 
     sm.configs = append(sm.configs, *buildConfig(result))
-    sm.px.Done(nextNum)
+    sm.px.Done(sm.maxSeq)
 
     if checkSameOp(op, result) {
       return nil
@@ -330,8 +344,9 @@ func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
   defer sm.mu.Unlock()
 
   for {
-    var nextNum = len(sm.configs)
-    decided, v := sm.px.Status(nextNum) 
+    sm.maxSeq += 1
+    
+    decided, v := sm.px.Status(sm.maxSeq) 
 
     var op Op
     if decided {
@@ -340,16 +355,19 @@ func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
       op = v.(Op)
 
       // build new config to catch up
-      var config = *buildConfig(op)
+      for op.OpType != QUERY {
+        var config = *buildConfig(op)
+        sm.configs = append(sm.configs, config)        
+      }
 
-      sm.configs = append(sm.configs, config)
-
-      sm.px.Done(nextNum)
+      sm.px.Done(sm.maxSeq)
       continue
     } else {
       // do not lag behind, try to agree with this operation
+      var nextNum = len(sm.configs)
       var curConfig = sm.configs[len(sm.configs) - 1]
 
+      op.Seq = sm.maxSeq
       op.Num = nextNum
       op.OpType = MOVE
       op.Shards = curConfig.Shards
@@ -365,11 +383,11 @@ func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
       }
     }
 
-    sm.px.Start(nextNum, op)
-    result := sm.wait(nextNum)
+    sm.px.Start(sm.maxSeq, op)
+    result := sm.wait(sm.maxSeq)
 
     sm.configs = append(sm.configs, *buildConfig(result))
-    sm.px.Done(nextNum)
+    sm.px.Done(sm.maxSeq)
 
     if checkSameOp(op, result) {
       return nil
@@ -382,25 +400,16 @@ func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) error {
   defer sm.mu.Unlock()
 
   for {
-    var nextNum = len(sm.configs)
-    decided, v := sm.px.Status(nextNum)
-    DPrintf("decided: %v, v: %v\n", decided, v)
+    sm.maxSeq += 1
 
     var op Op
-    if decided {
-      // lag behind, need to catch up
-      op = v.(Op)
+    op.Seq = sm.maxSeq
+    op.OpType = QUERY
 
-      // build new config to catch up
-      var config = *buildConfig(op)
+    sm.px.Start(sm.maxSeq, op)
+    result := sm.wait(sm.maxSeq)
 
-      sm.configs = append(sm.configs, config)
-
-      sm.px.Done(nextNum)
-      continue 
-    } else {
-      // do not lag behind, server the query
-      DPrintf("hhhhhh%v\n", sm.configs)
+    if checkSameOp(op, result) {
       if args.Num == -1 || args.Num >= len(sm.configs) {
         reply.Config = *copyConfig(sm.configs[len(sm.configs) - 1])
       } else {
@@ -408,7 +417,13 @@ func (sm *ShardMaster) Query(args *QueryArgs, reply *QueryReply) error {
           reply.Config = *copyConfig(sm.configs[args.Num])
         }
       }
+      sm.px.Done(sm.maxSeq)
       return nil
+    } else {
+      if result.OpType != QUERY {
+        sm.configs = append(sm.configs, *buildConfig(result))
+      }
+      sm.px.Done(sm.maxSeq)
     }
   }
 }
