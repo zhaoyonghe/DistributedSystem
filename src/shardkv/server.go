@@ -91,7 +91,8 @@ func isEqualOp(op1 Op, op2 Op) bool {
   a := op1.OpType == op2.OpType
   b := op1.ClientID == op2.ClientID
   c := op1.UID == op2.UID
-  return a && b && c
+  d := op1.Config.Num == op2.Config.Num
+  return a && b && c && d
 }
 
 func (kv *ShardKV) syncOps() {
@@ -141,7 +142,7 @@ func (kv *ShardKV) syncOps() {
           reply.PreviousValue = value
           kv.kvMap[op.Key] = strconv.Itoa(int(hash(value + op.Value)))
         } else {
-          reply.Err = ErrNoKey
+          reply.Err = OK
           reply.PreviousValue = ""
           kv.kvMap[op.Key] = strconv.Itoa(int(hash(op.Value)))
         }
@@ -154,7 +155,7 @@ func (kv *ShardKV) syncOps() {
       // check if needs to hand off the shards
       for i := 0; i < shardmaster.NShards; i++ {
         if kv.curConfig.Shards[i] == kv.gid && op.Config.Shards[i] != kv.gid {
-          DPrintf("DIFFERENT:%v\n\n", i)
+          DPrintf("gid:%v, me:%v, DIFFERENT:%v\n\n", kv.gid, kv.me, i)
           args := &ReceiveArgs{}
           args.TransferMap = make(map[string]string)
 
@@ -166,13 +167,19 @@ func (kv *ShardKV) syncOps() {
             }
           }
 
-          args.UID = nrand()
-          replicaAddrs := op.Config.Groups[op.Config.Shards[i]]
-          for k := 0; k <  len(replicaAddrs); k++ {
-            for j := 0; j < 15; j++ {
-              ok := call(replicaAddrs[k], "ShardKV.Receive", args, &reply)
-              if ok && reply.Err == OK {
-                break
+          if len(args.TransferMap) != 0 {
+            //args.UID = int64(op.Config.Num)
+            DPrintf("gid:%v, me:%v, yDIFFERENT:%v\n\n", kv.gid, kv.me, i)
+            DPrintf("gid:%v, me:%v, want to transfer:%v\n\n", kv.gid, kv.me, args.TransferMap)
+            DPrintf("from gid %v to gid %v\n\n", kv.gid, op.Config.Shards[i])
+            args.UID = nrand()
+            replicaAddrs := op.Config.Groups[op.Config.Shards[i]]
+            for k := 0; k < len(replicaAddrs); k++ {
+              for j := 0; j < 15; j++ {
+                ok := call(replicaAddrs[k], "ShardKV.Receive", args, &reply)
+                if ok && reply.Err == OK {
+                  break
+                }
               }
             }
           }
@@ -185,6 +192,7 @@ func (kv *ShardKV) syncOps() {
       DPrintf("=================================================\n")
     }
 
+    kv.px.Done(kv.curSeq)
     if kv.curSeq == kv.maxSeq {
       return
     } else {
@@ -196,6 +204,8 @@ func (kv *ShardKV) syncOps() {
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
   kv.mu.Lock()
   defer kv.mu.Unlock()
+
+  kv.smallTick()
 
   var op Op
   op.OpType = GET
@@ -214,7 +224,7 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
 
     if isEqualOp(op, result) {
       kv.syncOps()
-      DPrintf("GET curConfig:%v; op:%v; kvMap:%v;\n\n", kv.curConfig, op, kv.kvMap)
+      DPrintf("GET\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
       tempReply := kv.uidMap[op.UID].(GetReply)
       reply.Err = tempReply.Err
       reply.Value = tempReply.Value
@@ -226,6 +236,8 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
 func (kv *ShardKV) Put(args *PutArgs, reply *PutReply) error {
   kv.mu.Lock()
   defer kv.mu.Unlock()
+
+  kv.smallTick()
 
   var op Op
   if args.DoHash {
@@ -249,7 +261,7 @@ func (kv *ShardKV) Put(args *PutArgs, reply *PutReply) error {
 
     if isEqualOp(op, result) {
       kv.syncOps()
-      DPrintf("PUT/PUTHASH curConfig:%v; op:%v; kvMap:%v;\n\n", kv.curConfig, op, kv.kvMap)
+      DPrintf("PUT/PUTHASH\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
       tempReply := kv.uidMap[op.UID].(PutReply)
       reply.Err = tempReply.Err
       reply.PreviousValue = tempReply.PreviousValue
@@ -266,13 +278,17 @@ func (kv *ShardKV) tick() {
   kv.mu.Lock()
   defer kv.mu.Unlock()
 
+  kv.smallTick()
+}
+
+func (kv *ShardKV) smallTick() {
   newConfig := kv.sm.Query(-1)
   if newConfig.Num != kv.curConfig.Num {
     // a new confiuration
     var op Op
     op.OpType = RECONFIGURE
     op.ClientID = -1
-    op.UID = nrand()
+    op.UID = -1
     op.Config = *copyConfig(newConfig)
 
     for {
@@ -291,9 +307,11 @@ func (kv *ShardKV) tick() {
   }
 }
 
+
 func (kv *ShardKV) Receive(args *ReceiveArgs, reply *ReceiveReply) error {
   kv.mu.Lock()
   defer kv.mu.Unlock()
+  DPrintf("gid:%v RECEIVED IN", kv.gid)
 
   var lastReply ReceiveReply
 
@@ -301,6 +319,7 @@ func (kv *ShardKV) Receive(args *ReceiveArgs, reply *ReceiveReply) error {
   if exists {
     lastReply = mapReply.(ReceiveReply)
     reply.Err = lastReply.Err
+    DPrintf("HAS BEEN RECEIVED TransferMap:%v\n\n", args.TransferMap)
     return nil
   }
 
