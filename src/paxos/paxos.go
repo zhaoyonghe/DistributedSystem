@@ -508,6 +508,8 @@ func (px *Paxos) Status(seq int) (bool, interface{}) {
 
 	px.mu.Lock()
 	defer px.mu.Unlock()
+	//fmt.Printf("paxos %v\n", px.acceptorHistory)
+
 
 	acc := px.acceptorHistory[seq]
 	if acc == nil {

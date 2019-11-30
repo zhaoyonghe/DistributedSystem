@@ -14,6 +14,7 @@ const (
   OK = "OK"
   ErrNoKey = "ErrNoKey"
   ErrWrongGroup = "ErrWrongGroup"
+  ErrCannotGetYet = "ErrCannotGetYet"
 )
 type Err string
 
@@ -24,7 +25,6 @@ type PutArgs struct {
   // You'll have to add definitions here.
   // Field names must start with capital letters,
   // otherwise RPC will break.
-  Shard int
   UID int64
   ClientID int64
 }
@@ -37,7 +37,6 @@ type PutReply struct {
 type GetArgs struct {
   Key string
   // You'll have to add definitions here.
-  Shard int
   UID int64
   ClientID int64
 }
@@ -47,13 +46,16 @@ type GetReply struct {
   Value string
 }
 
-type ReceiveArgs struct {
-  TransferMap map[string]string
+type GrabShardsArgs struct {
+  Num int
+  Shard int
   UID int64
 }
 
-type ReceiveReply struct {
+type GrabShardsReply struct {
   Err Err
+  TransferKVMap map[string]string
+  TransferUIDMap map[int64]interface{}
 }
 
 

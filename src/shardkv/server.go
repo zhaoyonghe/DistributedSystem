@@ -61,12 +61,10 @@ type Op struct {
   OpType string
   ClientID int64
   UID int64
-  Shard int
   Key string
   Value string
   Config shardmaster.Config
 }
-
 
 type ShardKV struct {
   mu sync.Mutex
@@ -81,7 +79,6 @@ type ShardKV struct {
 
   // Your definitions here.
   maxSeq int
-  curSeq int
   curConfig shardmaster.Config
   kvMap map[string]string
   uidMap map[int64]interface{}
@@ -95,126 +92,114 @@ func isEqualOp(op1 Op, op2 Op) bool {
   return a && b && c && d
 }
 
-func (kv *ShardKV) syncOps() {
-  kv.curSeq += 1
-  for {
-    decided, v := kv.px.Status(kv.curSeq)
-    if !decided {
-      DPrintf("=================================================\n")
-      DPrintf("\n\n\n\n\n\nERROR! NOT DECIDED!\n\n\n\n\n\n")
-      DPrintf("=================================================\n")
-    }
-    var op Op
-    op = v.(Op)
-    if op.OpType == GET {
-      var reply GetReply
-      if kv.curConfig.Shards[key2shard(op.Key)] == kv.gid {
-        value, exists := kv.kvMap[op.Key]
-        if exists {
-          reply.Err = OK
-          reply.Value = value
-        } else {
-          reply.Err = ErrNoKey
-          reply.Value = ""
-        }
-      } else {
-        reply.Err = ErrWrongGroup
-        reply.Value = ""
-      }
-      kv.uidMap[op.UID] = reply
-    } else if op.OpType == PUT {
-      var reply PutReply
-      if kv.curConfig.Shards[key2shard(op.Key)] == kv.gid {
-        reply.Err = OK
-        reply.PreviousValue = ""
-        kv.kvMap[op.Key] = op.Value
-      } else {
-        reply.Err = ErrWrongGroup
-        reply.PreviousValue = ""      
-      }    
-      kv.uidMap[op.UID] = reply
-    } else if op.OpType == PUTHASH {
-      var reply PutReply
-      if kv.curConfig.Shards[key2shard(op.Key)] == kv.gid {
-        value, exists := kv.kvMap[op.Key]
-        if exists {
-          reply.Err = OK
-          reply.PreviousValue = value
-          kv.kvMap[op.Key] = strconv.Itoa(int(hash(value + op.Value)))
-        } else {
-          reply.Err = OK
-          reply.PreviousValue = ""
-          kv.kvMap[op.Key] = strconv.Itoa(int(hash(op.Value)))
-        }
-      } else {
-        reply.Err = ErrWrongGroup
-        reply.PreviousValue = ""
-      }
-      kv.uidMap[op.UID] = reply     
-    } else if op.OpType == RECONFIGURE {
-      // check if needs to hand off the shards
-      for i := 0; i < shardmaster.NShards; i++ {
-        if kv.curConfig.Shards[i] == kv.gid && op.Config.Shards[i] != kv.gid {
-          DPrintf("gid:%v, me:%v, DIFFERENT:%v\n\n", kv.gid, kv.me, i)
-          args := &ReceiveArgs{}
-          args.TransferMap = make(map[string]string)
-
-          var reply ReceiveReply
-
-          for key, value := range kv.kvMap {
-            if key2shard(key) == i {
-              args.TransferMap[key] = value
-            }
-          }
-
-          if len(args.TransferMap) != 0 {
-            //args.UID = int64(op.Config.Num)
-            DPrintf("gid:%v, me:%v, yDIFFERENT:%v\n\n", kv.gid, kv.me, i)
-            DPrintf("gid:%v, me:%v, want to transfer:%v\n\n", kv.gid, kv.me, args.TransferMap)
-            DPrintf("from gid %v to gid %v\n\n", kv.gid, op.Config.Shards[i])
-            args.UID = nrand()
-            replicaAddrs := op.Config.Groups[op.Config.Shards[i]]
-            for k := 0; k < len(replicaAddrs); k++ {
-              for j := 0; j < 15; j++ {
-                ok := call(replicaAddrs[k], "ShardKV.Receive", args, &reply)
-                if ok && reply.Err == OK {
-                  break
-                }
-              }
-            }
-          }
-        }
-      }
-      kv.curConfig = op.Config
+func (kv *ShardKV) executeOp(op Op) interface{} {
+  if op.OpType == GET {
+    var reply GetReply
+    value, ex := kv.kvMap[op.Key]
+    if ex {
+      reply.Err = OK
+      reply.Value = value
     } else {
-      DPrintf("=================================================\n")
-      DPrintf("\n\n\n\n\n\nERROR! EMPTY OP!\n\n\n\n\n\n")
-      DPrintf("=================================================\n")
+      reply.Err = ErrNoKey
+      reply.Value = ""
     }
-
-    kv.px.Done(kv.curSeq)
-    if kv.curSeq == kv.maxSeq {
-      return
-    } else {
-      kv.curSeq += 1
-    }
+    kv.uidMap[op.UID] = reply
+    DPrintf("GET\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v; uidMap:%v\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap, kv.uidMap)
+    kv.px.Done(op.Seq)
+    return reply
   }
+
+  if op.OpType == PUT {
+    var reply PutReply
+    reply.Err = OK
+    kv.kvMap[op.Key] = op.Value
+    kv.uidMap[op.UID] = reply 
+    DPrintf("PUT\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
+    kv.px.Done(op.Seq)
+    return reply
+  }
+
+  if op.OpType == PUTHASH {
+    var reply PutReply
+    value, ex := kv.kvMap[op.Key]
+    if ex {
+      reply.Err = OK
+      reply.PreviousValue = value
+      kv.kvMap[op.Key] = strconv.Itoa(int(hash(value + op.Value)))
+    } else {
+      reply.Err = OK
+      reply.PreviousValue = ""
+      kv.kvMap[op.Key] = strconv.Itoa(int(hash(op.Value)))
+    }
+    kv.uidMap[op.UID] = reply 
+    kv.px.Done(op.Seq)
+    DPrintf("PUTHASH\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
+    return reply      
+  }
+
+  if op.OpType == RECONFIGURE {
+    for i := 0; i < shardmaster.NShards; i++ {
+      if op.Config.Shards[i] == kv.gid && kv.curConfig.Shards[i] != kv.gid {
+        args := &GrabShardsArgs{}
+        args.Num = kv.curConfig.Num
+        args.Shard = i
+        var reply GrabShardsReply
+
+        for _, srv := range kv.curConfig.Groups[kv.curConfig.Shards[i]] {
+          ok := call(srv, "ShardKV.GrabShards", args, &reply)
+
+          if ok && reply.Err == OK {
+            for key, value := range reply.TransferKVMap {
+              kv.kvMap[key] = value
+            }
+            /*
+            for key, value := range reply.TransferUIDMap {
+              kv.uidMap[key] = value
+            }*/
+            break
+          }
+
+          if ok && reply.Err == ErrCannotGetYet {
+            return "fail"
+          }
+        }
+        DPrintf("%v, %v", op.Config.Shards, kv.curConfig.Shards)
+        DPrintf("gid:%v me:%v grab from group %v, now:%v\n\n", kv.gid, kv.me, kv.curConfig.Shards[i], kv.kvMap)
+      }
+    }
+    kv.curConfig = *copyConfig(op.Config)
+    kv.px.Done(op.Seq)
+    //DPrintf("RECONFIGURE\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
+    return "success" 
+  }
+
+  return nil
 }
 
 func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
   kv.mu.Lock()
   defer kv.mu.Unlock()
 
-  kv.smallTick()
-
   var op Op
   op.OpType = GET
-  op.UID = args.UID
+  op.UID = nrand()
   op.ClientID = args.ClientID
-  op.Shard = args.Shard
   op.Key = args.Key
 
   for {
+    mapReply, exists := kv.uidMap[op.UID]
+    if exists {
+      tempReply := mapReply.(GetReply)
+      reply.Err = tempReply.Err
+      reply.Value = tempReply.Value
+      return nil
+    }
+
+    if kv.gid != kv.curConfig.Shards[key2shard(op.Key)] {
+      reply.Err = ErrWrongGroup
+      return nil
+    }
+
     kv.maxSeq += 1
 
     op.Seq = kv.maxSeq
@@ -223,12 +208,13 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
     result := kv.wait(kv.maxSeq)
 
     if isEqualOp(op, result) {
-      kv.syncOps()
-      DPrintf("GET\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
-      tempReply := kv.uidMap[op.UID].(GetReply)
+      // This op has been agreed by all replicas in this group
+      tempReply := kv.executeOp(result).(GetReply)
       reply.Err = tempReply.Err
       reply.Value = tempReply.Value
       return nil
+    } else {
+      kv.executeOp(result)
     }
   }
 }
@@ -237,21 +223,31 @@ func (kv *ShardKV) Put(args *PutArgs, reply *PutReply) error {
   kv.mu.Lock()
   defer kv.mu.Unlock()
 
-  kv.smallTick()
-
   var op Op
   if args.DoHash {
     op.OpType = PUTHASH
   } else {
     op.OpType = PUT
   }
-  op.UID = args.UID
+  op.UID = nrand()
   op.ClientID = args.ClientID
-  op.Shard = args.Shard
   op.Key = args.Key
   op.Value = args.Value
 
   for {
+    mapReply, exists := kv.uidMap[op.UID]
+    if exists {
+      tempReply := mapReply.(PutReply)
+      reply.Err = tempReply.Err
+      reply.PreviousValue = tempReply.PreviousValue
+      return nil
+    }
+
+    if kv.gid != kv.curConfig.Shards[key2shard(op.Key)] {
+      reply.Err = ErrWrongGroup
+      return nil
+    }
+
     kv.maxSeq += 1
 
     op.Seq = kv.maxSeq
@@ -260,14 +256,45 @@ func (kv *ShardKV) Put(args *PutArgs, reply *PutReply) error {
     result := kv.wait(kv.maxSeq)
 
     if isEqualOp(op, result) {
-      kv.syncOps()
-      DPrintf("PUT/PUTHASH\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
-      tempReply := kv.uidMap[op.UID].(PutReply)
+      // This op has been agreed by all replicas in this group
+      tempReply := kv.executeOp(result).(PutReply)
       reply.Err = tempReply.Err
       reply.PreviousValue = tempReply.PreviousValue
       return nil
+    } else {
+      kv.executeOp(result)
     }
   }
+}
+
+func (kv *ShardKV) GrabShards(args *GrabShardsArgs, reply *GrabShardsReply) error {
+  if kv.curConfig.Num < args.Num {
+    DPrintf("ErrCannotGetYet\n\n")
+    reply.Err = ErrCannotGetYet
+    return nil
+  }
+
+  kv.mu.Lock()
+  defer kv.mu.Unlock()
+
+  reply.TransferKVMap = make(map[string]string)
+  //reply.TransferUIDMap = make(map[int64]interface{})
+
+  for key, value := range kv.kvMap {
+    DPrintf("%v\n", key)
+    if key2shard(key) == args.Shard {
+      DPrintf("bbbbbbbbbbb\n\n\n")
+      reply.TransferKVMap[key] = value
+    }
+  }
+/*
+  for key, value := range kv.uidMap {
+      reply.TransferUIDMap[key] = value
+  }
+*/
+  reply.Err = OK
+
+  return nil
 }
 
 //
@@ -278,12 +305,12 @@ func (kv *ShardKV) tick() {
   kv.mu.Lock()
   defer kv.mu.Unlock()
 
-  kv.smallTick()
-}
-
-func (kv *ShardKV) smallTick() {
-  newConfig := kv.sm.Query(-1)
-  if newConfig.Num != kv.curConfig.Num {
+  latestConfig := kv.sm.Query(-1)
+  from := kv.curConfig.Num
+  to := latestConfig.Num
+  for num := from + 1; num <= to; num++ {
+    DPrintf("gid:%v, me:%v, query config:%v\n\n", kv.gid, kv.me, num)
+    newConfig := kv.sm.Query(num)
     // a new confiuration
     var op Op
     op.OpType = RECONFIGURE
@@ -300,43 +327,20 @@ func (kv *ShardKV) smallTick() {
       result := kv.wait(kv.maxSeq)
 
       if isEqualOp(op, result) {
-        kv.syncOps()
-        return
+        // This op has been agreed by all replicas in this group
+        str := kv.executeOp(result).(string)
+        if str == "success" {
+          break
+        } else {
+          // str == "fail"
+          return
+        }
+      } else {
+        kv.executeOp(result)
       }
     }
   }
 }
-
-
-func (kv *ShardKV) Receive(args *ReceiveArgs, reply *ReceiveReply) error {
-  kv.mu.Lock()
-  defer kv.mu.Unlock()
-  DPrintf("gid:%v RECEIVED IN", kv.gid)
-
-  var lastReply ReceiveReply
-
-  mapReply, exists := kv.uidMap[args.UID]
-  if exists {
-    lastReply = mapReply.(ReceiveReply)
-    reply.Err = lastReply.Err
-    DPrintf("HAS BEEN RECEIVED TransferMap:%v\n\n", args.TransferMap)
-    return nil
-  }
-
-  // have not received yet
-  for key, value := range args.TransferMap {
-    kv.kvMap[key] = value
-  }
-
-  lastReply.Err = OK
-  reply.Err = OK
-
-  kv.uidMap[args.UID] = lastReply
-  DPrintf("RECEIVED TransferMap:%v\n\n", args.TransferMap)
-
-  return nil
-}
-
 
 // tell the server to shut itself down.
 func (kv *ShardKV) kill() {
@@ -367,7 +371,6 @@ func StartServer(gid int64, shardmasters []string,
   // Don't call Join().
 
   kv.maxSeq = 0
-  kv.curSeq = 0
   kv.curConfig.Groups = make(map[int64][]string)
   kv.kvMap = make(map[string]string)
   kv.uidMap = make(map[int64]interface{})

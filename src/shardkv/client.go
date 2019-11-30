@@ -69,7 +69,6 @@ func (ck *Clerk) Get(key string) string {
       for _, srv := range servers {
         args := &GetArgs{}
         args.Key = key
-        args.Shard = shard
         args.UID = uid
         args.ClientID = ck.ckid
         var reply GetReply
@@ -112,7 +111,6 @@ func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
         args.Key = key
         args.Value = value
         args.DoHash = dohash
-        args.Shard = shard
         args.UID = uid
         args.ClientID = ck.ckid
         var reply PutReply

@@ -12,7 +12,7 @@ import "encoding/gob"
 import "math/rand"
 import "time"
 
-const Debug = 0
+const Debug = 1
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
   if Debug > 0 {
@@ -173,7 +173,7 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
           for i := 0; i < NShards; i++ {
             groupsShards[curConfig.Shards[i]] = append(groupsShards[curConfig.Shards[i]], i)
           }
-          DPrintf("%v\n", groupsShards)
+          // DPrintf("%v\n", groupsShards)
 
           minShards := NShards / (groupsNum + 1)
           maxShards := minShards
@@ -217,6 +217,7 @@ func (sm *ShardMaster) Join(args *JoinArgs, reply *JoinReply) error {
     sm.px.Done(sm.maxSeq)
 
     if checkSameOp(op, result) {
+      DPrintf("after join: %v", op.Shards)
       return nil
     }
   }
@@ -294,17 +295,18 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
 
           // rebalance
           for gid, shards := range groupsShards {
-            temp := len(leaveGroupShards) - (maxShards - len(shards))
+            want := maxShards - len(shards)
+            start := len(leaveGroupShards) - want
             //DPrintf("asd%v\nasd%v\n", leaveGroupShards, groupsShards)
             //DPrintf("temp: %v; len(l): %v, maxShards:%v, len(s): %v, groupsNum: %v", 
             //temp, len(leaveGroupShards), maxShards, len(shards), groupsNum)
-            if temp > 0 {
-              groupsShards[gid] = append(shards, leaveGroupShards[temp:len(leaveGroupShards)]...)
+            if start < 0 {
+              start = 0
+            }
+            if want > 0 {
+              groupsShards[gid] = append(shards, leaveGroupShards[start:len(leaveGroupShards)]...)
+              leaveGroupShards = leaveGroupShards[0:start]
               //DPrintf("kkkk%v\n", shards)
-            } else {
-              groupsShards[gid] = append(shards, leaveGroupShards[0:len(leaveGroupShards)]...)
-              //DPrintf("kkkk%v\n", shards)
-              break
             }
           }
 
@@ -315,6 +317,11 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
               op.Shards[shards[i]] = gid
             }
             //DPrintf("%v\n", op.Shards)
+          }
+          for i := 0; i < len(op.Shards); i++ {
+            if op.Shards[i] == 0 {
+              DPrintf("\n\n\nop.Shards[%v] = 0\n\n\n", i)
+            }
           }
         }
       }
@@ -334,6 +341,7 @@ func (sm *ShardMaster) Leave(args *LeaveArgs, reply *LeaveReply) error {
     sm.px.Done(sm.maxSeq)
 
     if checkSameOp(op, result) {
+      DPrintf("after leave: %v", op.Shards)
       return nil
     }
   }
@@ -390,6 +398,7 @@ func (sm *ShardMaster) Move(args *MoveArgs, reply *MoveReply) error {
     sm.px.Done(sm.maxSeq)
 
     if checkSameOp(op, result) {
+      DPrintf("after move: %v", op.Shards)
       return nil
     }
   }
