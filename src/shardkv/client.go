@@ -14,7 +14,6 @@ type Clerk struct {
   config shardmaster.Config
   // You'll have to modify Clerk.
   ckid int64
-  orderid int64
 }
 
 func MakeClerk(shardmasters []string) *Clerk {
@@ -56,7 +55,7 @@ func (ck *Clerk) Get(key string) string {
   defer ck.mu.Unlock()
 
   // You'll have to modify Get().
-  ck.orderid += 1
+  uid := nrand()
 
   for {
     shard := key2shard(key)
@@ -70,21 +69,19 @@ func (ck *Clerk) Get(key string) string {
       for _, srv := range servers {
         args := &GetArgs{}
         args.Key = key
-        args.OrderID = ck.orderid
+        args.UID = uid
         args.ClientID = ck.ckid
-        for i := 0; i < 10; i++ {
-          var reply GetReply
-          ok := call(srv, "ShardKV.Get", args, &reply)
-          if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
-            return reply.Value
-          }
-          if ok && (reply.Err == ErrWrongGroup) {
-            goto end
-          }
+        var reply GetReply
+        ok := call(srv, "ShardKV.Get", args, &reply)
+        if ok && (reply.Err == OK || reply.Err == ErrNoKey) {
+          return reply.Value
+        }
+        if ok && (reply.Err == ErrWrongGroup) {
+          break
         }
       }
     }
-end:
+
     time.Sleep(100 * time.Millisecond)
 
     // ask master for a new configuration.
@@ -98,7 +95,7 @@ func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
   defer ck.mu.Unlock()
 
   // You'll have to modify Put().
-  ck.orderid += 1
+  uid := nrand()
 
   for {
     shard := key2shard(key)
@@ -114,22 +111,19 @@ func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
         args.Key = key
         args.Value = value
         args.DoHash = dohash
-        args.OrderID = ck.orderid
+        args.UID = uid
         args.ClientID = ck.ckid
-        for i := 0; i < 10; i++ {
-          var reply PutReply
-          ok := call(srv, "ShardKV.Put", args, &reply)
-          if ok && reply.Err == OK {
-            return reply.PreviousValue
-          }
-          if ok && (reply.Err == ErrWrongGroup) {
-            goto end
-          } 
+        var reply PutReply
+        ok := call(srv, "ShardKV.Put", args, &reply)
+        if ok && reply.Err == OK {
+          return reply.PreviousValue
+        }
+        if ok && (reply.Err == ErrWrongGroup) {
+          break
         }
       }
     }
 
-end:
     time.Sleep(100 * time.Millisecond)
 
     // ask master for a new configuration.

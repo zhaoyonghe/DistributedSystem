@@ -60,7 +60,6 @@ type Op struct {
   Seq int
   OpType string
   ClientID int64
-  OrderID int64
   UID int64
   Key string
   Value string
@@ -82,8 +81,7 @@ type ShardKV struct {
   maxSeq int
   curConfig shardmaster.Config
   kvMap map[string]string
-  orderidMap map[int64]int64
-  replyMap map[int64]interface{}
+  uidMap map[int64]interface{}
 }
 
 func isEqualOp(op1 Op, op2 Op) bool {
@@ -105,9 +103,8 @@ func (kv *ShardKV) executeOp(op Op) interface{} {
       reply.Err = ErrNoKey
       reply.Value = ""
     }
-    kv.orderidMap[op.ClientID] = op.OrderID
-    kv.replyMap[op.ClientID] = reply
-    //DPrintf("GET\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v; uidMap:%v\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap, kv.uidMap)
+    kv.uidMap[op.UID] = reply
+    DPrintf("GET\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v; uidMap:%v\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap, kv.uidMap)
     kv.px.Done(op.Seq)
     return reply
   }
@@ -116,9 +113,8 @@ func (kv *ShardKV) executeOp(op Op) interface{} {
     var reply PutReply
     reply.Err = OK
     kv.kvMap[op.Key] = op.Value
-    kv.orderidMap[op.ClientID] = op.OrderID
-    kv.replyMap[op.ClientID] = reply
-    //DPrintf("PUT\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
+    kv.uidMap[op.UID] = reply 
+    DPrintf("PUT\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
     kv.px.Done(op.Seq)
     return reply
   }
@@ -135,10 +131,9 @@ func (kv *ShardKV) executeOp(op Op) interface{} {
       reply.PreviousValue = ""
       kv.kvMap[op.Key] = strconv.Itoa(int(hash(op.Value)))
     }
-    kv.orderidMap[op.ClientID] = op.OrderID
-    kv.replyMap[op.ClientID] = reply 
+    kv.uidMap[op.UID] = reply 
     kv.px.Done(op.Seq)
-    //DPrintf("PUTHASH\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
+    DPrintf("PUTHASH\n gid:%v;\n me:%v;\n curConfig:%v;\n op:%v;\n kvMap:%v;\n\n", kv.gid, kv.me, kv.curConfig, op, kv.kvMap)
     return reply      
   }
 
@@ -157,15 +152,10 @@ func (kv *ShardKV) executeOp(op Op) interface{} {
             for key, value := range reply.TransferKVMap {
               kv.kvMap[key] = value
             }
-            
-            for key, _ := range reply.TransferOrderIDMap {
-              orderid, exists := kv.orderidMap[key]
-              if !exists || orderid < reply.TransferOrderIDMap[key] {
-                kv.orderidMap[key] = reply.TransferOrderIDMap[key]
-                kv.replyMap[key] = reply.TransferReplyMap[key]
-              }
-              
-            }
+            /*
+            for key, value := range reply.TransferUIDMap {
+              kv.uidMap[key] = value
+            }*/
             break
           }
 
@@ -194,20 +184,19 @@ func (kv *ShardKV) Get(args *GetArgs, reply *GetReply) error {
   op.OpType = GET
   op.UID = nrand()
   op.ClientID = args.ClientID
-  op.OrderID = args.OrderID
   op.Key = args.Key
 
   for {
-    if kv.gid != kv.curConfig.Shards[key2shard(op.Key)] {
-      reply.Err = ErrWrongGroup
+    mapReply, exists := kv.uidMap[op.UID]
+    if exists {
+      tempReply := mapReply.(GetReply)
+      reply.Err = tempReply.Err
+      reply.Value = tempReply.Value
       return nil
     }
 
-    orderid, exists := kv.orderidMap[op.ClientID]
-    if exists && orderid >= op.OrderID {
-      tempReply := kv.replyMap[op.ClientID].(GetReply)
-      reply.Err = tempReply.Err
-      reply.Value = tempReply.Value
+    if kv.gid != kv.curConfig.Shards[key2shard(op.Key)] {
+      reply.Err = ErrWrongGroup
       return nil
     }
 
@@ -246,16 +235,16 @@ func (kv *ShardKV) Put(args *PutArgs, reply *PutReply) error {
   op.Value = args.Value
 
   for {
-    if kv.gid != kv.curConfig.Shards[key2shard(op.Key)] {
-      reply.Err = ErrWrongGroup
+    mapReply, exists := kv.uidMap[op.UID]
+    if exists {
+      tempReply := mapReply.(PutReply)
+      reply.Err = tempReply.Err
+      reply.PreviousValue = tempReply.PreviousValue
       return nil
     }
 
-    orderid, exists := kv.orderidMap[op.ClientID]
-    if exists && orderid >= op.OrderID {
-      tempReply := kv.replyMap[op.ClientID].(PutReply)
-      reply.Err = tempReply.Err
-      reply.PreviousValue = tempReply.PreviousValue
+    if kv.gid != kv.curConfig.Shards[key2shard(op.Key)] {
+      reply.Err = ErrWrongGroup
       return nil
     }
 
@@ -289,8 +278,7 @@ func (kv *ShardKV) GrabShards(args *GrabShardsArgs, reply *GrabShardsReply) erro
   defer kv.mu.Unlock()
 
   reply.TransferKVMap = make(map[string]string)
-  reply.TransferOrderIDMap = make(map[int64]int64)
-  reply.TransferReplyMap = make(map[int64]interface{})
+  //reply.TransferUIDMap = make(map[int64]interface{})
 
   for key, value := range kv.kvMap {
     DPrintf("%v\n", key)
@@ -299,12 +287,11 @@ func (kv *ShardKV) GrabShards(args *GrabShardsArgs, reply *GrabShardsReply) erro
       reply.TransferKVMap[key] = value
     }
   }
-
-  for key, _ := range kv.orderidMap {
-      reply.TransferOrderIDMap[key] = kv.orderidMap[key]
-      reply.TransferReplyMap[key] = kv.replyMap[key]
+/*
+  for key, value := range kv.uidMap {
+      reply.TransferUIDMap[key] = value
   }
-
+*/
   reply.Err = OK
 
   return nil
@@ -386,8 +373,7 @@ func StartServer(gid int64, shardmasters []string,
   kv.maxSeq = 0
   kv.curConfig.Groups = make(map[int64][]string)
   kv.kvMap = make(map[string]string)
-  kv.orderidMap = make(map[int64]int64)
-  kv.replyMap = make(map[int64]interface{})
+  kv.uidMap = make(map[int64]interface{})
 
   rpcs := rpc.NewServer()
   rpcs.Register(kv)

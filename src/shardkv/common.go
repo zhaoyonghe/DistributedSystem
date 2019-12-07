@@ -25,7 +25,7 @@ type PutArgs struct {
   // You'll have to add definitions here.
   // Field names must start with capital letters,
   // otherwise RPC will break.
-  OrderID int64
+  UID int64
   ClientID int64
 }
 
@@ -37,7 +37,7 @@ type PutReply struct {
 type GetArgs struct {
   Key string
   // You'll have to add definitions here.
-  OrderID int64
+  UID int64
   ClientID int64
 }
 
@@ -55,8 +55,7 @@ type GrabShardsArgs struct {
 type GrabShardsReply struct {
   Err Err
   TransferKVMap map[string]string
-  TransferOrderIDMap map[int64]int64
-  TransferReplyMap map[int64]interface{}
+  TransferUIDMap map[int64]interface{}
 }
 
 
