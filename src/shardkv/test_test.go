@@ -7,7 +7,7 @@ import "strconv"
 import "os"
 import "time"
 import "fmt"
-//import "sync"
+import "sync"
 import "math/rand"
 
 func port(tag string, host int) string {
@@ -78,7 +78,7 @@ func setup(tag string, unreliable bool) ([]string, []int64, [][]string, [][]*Sha
   clean := func() { cleanup(sa) ; mcleanup(sma) }
   return smh, gids, ha, sa, clean
 }
-/*
+
 func TestBasic(t *testing.T) {
   smh, gids, ha, _, clean := setup("basic", false)
   defer clean()
@@ -262,7 +262,7 @@ func TestLimp(t *testing.T) {
 
   fmt.Printf("  ... Passed\n")
 }
-*/
+
 func doConcurrent(t *testing.T, unreliable bool) {
   smh, gids, ha, _, clean := setup("conc"+strconv.FormatBool(unreliable), unreliable)
   defer clean()
@@ -319,9 +319,9 @@ func TestConcurrent(t *testing.T) {
   doConcurrent(t, false)
   fmt.Printf("  ... Passed\n")
 }
-/*
+
 func TestConcurrentUnreliable(t *testing.T) {
   fmt.Printf("Test: Concurrent Put/Get/Move (unreliable) ...\n")
   doConcurrent(t, true)
   fmt.Printf("  ... Passed\n")
-}*/
+}

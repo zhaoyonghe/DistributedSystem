@@ -1,5 +1,4 @@
 package shardkv
-import "hash/fnv"
 
 //
 // Sharded key/value server.
@@ -11,22 +10,22 @@ import "hash/fnv"
 //
 
 const (
-  OK = "OK"
-  ErrNoKey = "ErrNoKey"
-  ErrWrongGroup = "ErrWrongGroup"
-  ErrCannotGetYet = "ErrCannotGetYet"
+	OK = "OK"
+	ErrNoKey = "ErrNoKey"
+	ErrWrongGroup = "ErrWrongGroup"
+	ErrCannotGetYet = "ErrCannotGetYet"
 )
+
 type Err string
 
 type PutArgs struct {
-  Key string
-  Value string
-  DoHash bool  // For PutHash
+	Key string
+	Value string
+	DoHash bool // For PutHash
   // You'll have to add definitions here.
   // Field names must start with capital letters,
   // otherwise RPC will break.
-  UID int64
-  ClientID int64
+	UID int64
 }
 
 type PutReply struct {
@@ -38,7 +37,6 @@ type GetArgs struct {
   Key string
   // You'll have to add definitions here.
   UID int64
-  ClientID int64
 }
 
 type GetReply struct {
@@ -47,21 +45,13 @@ type GetReply struct {
 }
 
 type GrabShardsArgs struct {
-  Num int
-  Shard int
-  UID int64
+	Num int
+	Shard int
+	UID int64
 }
 
 type GrabShardsReply struct {
-  Err Err
-  TransferKVMap map[string]string
-  TransferUIDMap map[int64]interface{}
+	Err Err
+	TransferKVMap map[string]string
+	TransferUIDMap map[int64]interface{}
 }
-
-
-func hash(s string) uint32 {
-  h := fnv.New32a()
-  h.Write([]byte(s))
-  return h.Sum32()
-}
-
